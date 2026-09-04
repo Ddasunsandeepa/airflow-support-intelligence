@@ -2,12 +2,21 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from backend.app.analyze import analyze_incident
+from fastapi.middleware.cors import CORSMiddleware
 
 
 app = FastAPI(
     title="Airflow Support Intelligence",
     description="AI-assisted L1 Airflow incident investigation and support guidance",
     version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -57,9 +66,10 @@ def analyze(evidence: IncidentEvidence):
         },
 
         "guidance": {
-            "runbook": result["runbook"],
-            "runbook_status": result["runbook_status"],
-            "l1_checks": recommendation["l1_checks"],
+        "runbook": result["runbook"],
+        "runbook_status": result["runbook_status"],
+        "runbook_content": result["runbook_content"],
+        "l1_checks": recommendation["l1_checks"],
         },
 
         "escalation": {
