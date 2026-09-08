@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const DEFAULT_EVIDENCE = {
   cpu_usage: 94,
@@ -14,10 +14,108 @@ function App() {
   const [evidence, setEvidence] = useState(DEFAULT_EVIDENCE);
   const [result, setResult] = useState(null);
   const [airflowResult, setAirflowResult] = useState(null);
+
+  const [catalog, setCatalog] = useState({
+    registered_dags: [],
+    import_errors: [],
+  });
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState("");
+  const [selectedIncident, setSelectedIncident] = useState({
+    type: "dag",
+    id: "support_intelligence_kubernetes_failure",
+  });
   const [loading, setLoading] = useState(false);
   const [airflowLoading, setAirflowLoading] = useState(false);
   const [error, setError] = useState("");
   const [airflowError, setAirflowError] = useState("");
+
+  useEffect(() => {
+    const loadAirflowCatalog = async () => {
+      setCatalogLoading(true);
+      setCatalogError("");
+
+      try {
+        const response = await fetch("/api/airflow-catalog");
+
+        if (!response.ok) {
+          throw new Error(`Catalog request failed with status ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        setCatalog({
+          registered_dags: data.registered_dags || [],
+          import_errors: data.import_errors || [],
+        });
+
+        const defaultDag =
+          (data.registered_dags || []).find(
+            (dag) => dag.id === "support_intelligence_kubernetes_failure"
+          ) || (data.registered_dags || [])[0];
+
+        if (defaultDag) {
+          setSelectedIncident({
+            type: "dag",
+            id: defaultDag.id,
+          });
+        } else if ((data.import_errors || []).length > 0) {
+          setSelectedIncident({
+            type: "import_error",
+            id: String(data.import_errors[0].id),
+          });
+        }
+      } catch (err) {
+        setCatalogError(
+          "Could not load the live Airflow incident catalog. " +
+            "Make sure the FastAPI server is running."
+        );
+      } finally {
+        setCatalogLoading(false);
+      }
+    };
+
+    loadAirflowCatalog();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const pollForNewIncident = async () => {
+      try {
+        const response = await fetch("/api/incident-feed");
+        if (!response.ok) return;
+
+        const data = await response.json();
+
+        if (
+          !cancelled &&
+          data.new_incident &&
+          data.incident &&
+          data.incident.dag_id
+        ) {
+          const incident = {
+            type: "dag",
+            id: data.incident.dag_id,
+          };
+
+          setSelectedIncident(incident);
+          await analyzeIncidentSelection(incident);
+        }
+      } catch (err) {
+        // Keep polling quietly; manual analysis remains available.
+      }
+    };
+
+    // Establish the baseline immediately, then watch for new failures.
+    pollForNewIncident();
+    const intervalId = setInterval(pollForNewIncident, 5000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, []);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -59,15 +157,31 @@ function App() {
     }
   };
 
-  const analyzeLiveAirflow = async () => {
+  const analyzeIncidentSelection = async (incident) => {
     setAirflowLoading(true);
     setAirflowError("");
     setAirflowResult(null);
 
     try {
-      const response = await fetch("/api/analyze-airflow", {
-        method: "POST",
-      });
+      let response;
+
+      if (incident.type === "import_error") {
+        response = await fetch(
+          `/api/analyze-import-error?import_error_id=${encodeURIComponent(
+            incident.id
+          )}`,
+          {
+            method: "POST",
+          }
+        );
+      } else {
+        response = await fetch(
+          `/api/analyze-airflow?dag_id=${encodeURIComponent(incident.id)}`,
+          {
+            method: "POST",
+          }
+        );
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -76,11 +190,10 @@ function App() {
       }
 
       const data = await response.json();
-
       setAirflowResult(data);
     } catch (err) {
       setAirflowError(
-        "Could not analyze the local Airflow environment. " +
+        "Could not analyze the selected Airflow incident. " +
           "Make sure the Airflow API and FastAPI server are running."
       );
     } finally {
@@ -88,12 +201,34 @@ function App() {
     }
   };
 
+  const analyzeLiveAirflow = async () => {
+    await analyzeIncidentSelection(selectedIncident);
+  };
+
+
   const resetAnalysis = () => {
     setEvidence(DEFAULT_EVIDENCE);
     setResult(null);
     setAirflowResult(null);
     setError("");
     setAirflowError("");
+
+    const defaultDag =
+      catalog.registered_dags.find(
+        (dag) => dag.id === "support_intelligence_kubernetes_failure"
+      ) || catalog.registered_dags[0];
+
+    if (defaultDag) {
+      setSelectedIncident({
+        type: "dag",
+        id: defaultDag.id,
+      });
+    } else if (catalog.import_errors.length > 0) {
+      setSelectedIncident({
+        type: "import_error",
+        id: String(catalog.import_errors[0].id),
+      });
+    }
   };
 
   return (
@@ -180,6 +315,70 @@ function App() {
               value={evidence.worker_restarts}
               onChange={handleChange}
             />
+          </div>
+
+          <div className="dag-selector">
+            <label htmlFor="dag-select">Live Airflow Incident</label>
+
+            <select
+              id="dag-select"
+              value={`${selectedIncident.type}:${selectedIncident.id}`}
+              onChange={(event) => {
+                const separatorIndex = event.target.value.indexOf(":");
+                const type = event.target.value.slice(0, separatorIndex);
+                const id = event.target.value.slice(separatorIndex + 1);
+
+                setSelectedIncident({ type, id });
+              }}
+              disabled={catalogLoading || (catalog.registered_dags.length === 0 && catalog.import_errors.length === 0)}
+            >
+              {catalog.registered_dags.length > 0 && (
+                <optgroup label="Registered DAGs">
+                  {catalog.registered_dags.map((dag) => (
+                    <option key={`dag:${dag.id}`} value={`dag:${dag.id}`}>
+                      {dag.label}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+
+              {catalog.import_errors.length > 0 && (
+                <optgroup label="Parsing / Import Errors">
+                  {catalog.import_errors.map((error) => (
+                    <option
+                      key={`import_error:${error.id}`}
+                      value={`import_error:${error.id}`}
+                    >
+                      {error.label}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+
+              {catalogLoading && (
+                <option value="loading:loading">Loading Airflow catalog...</option>
+              )}
+
+              {!catalogLoading &&
+                catalog.registered_dags.length === 0 &&
+                catalog.import_errors.length === 0 && (
+                  <option value="empty:empty">
+                    No Airflow incidents available
+                  </option>
+                )}
+            </select>
+
+            <small>
+              {catalogLoading
+                ? "Loading incidents directly from Airflow..."
+                : catalogError
+                  ? catalogError
+                  : "Incidents are discovered dynamically from the connected Airflow environment."}
+            </small>
+
+            {catalogError && (
+              <div className="error-message">{catalogError}</div>
+            )}
           </div>
 
           <div className="action-row">
@@ -393,42 +592,152 @@ function App() {
               </span>
             </section>
 
+  
             <section className="result-grid">
               <div className="card classification-card">
-                <p className="card-label">AIRFLOW CLASSIFICATION</p>
+                <p className="card-label">HYBRID CLASSIFICATION</p>
 
                 <div className="classification-content">
                   <div>
                     <h2>{airflowResult.incident.class}</h2>
 
-                    <p>{airflowResult.incident.classification_status}</p>
+                    <p>
+                      Final incident classification from the ML + LLM
+                      decision layer.
+                    </p>
                   </div>
 
                   <div className="confidence">
                     <span>
-                      {airflowResult.incident.classification_confidence ===
-                      null
+                      {airflowResult.incident.classification_confidence === null
                         ? "—"
                         : `${(
-                            airflowResult.incident
-                              .classification_confidence * 100
+                            airflowResult.incident.classification_confidence * 100
                           ).toFixed(1)}%`}
                     </span>
 
-                    <small>classification confidence</small>
+                    <small>confidence</small>
                   </div>
                 </div>
               </div>
 
               <div className="card decision-card">
-                <p className="card-label">L1 GUIDANCE / ESCALATION</p>
+                <p className="card-label">HYBRID DECISION</p>
 
-                <h3>{airflowResult.escalation.recommendation}</h3>
+                <h3>
+                  {airflowResult.incident.decision_mode}
+                </h3>
 
                 <p>
-                  The system provides investigation guidance only and does not
-                  automatically modify the Airflow environment.
+                  {airflowResult.incident.human_review
+                    ? "Human review is required before making an operational decision."
+                    : "No additional human review is required based on the current evidence."}
                 </p>
+
+                <p>
+                  ML / LLM agreement:{" "}
+                  <strong>
+                    {airflowResult.incident.agreement ? "Yes" : "No"}
+                  </strong>
+                </p>
+              </div>
+            </section>
+
+            {/* Hybrid Model Analysis */}
+            <section className="guidance-grid">
+              <div className="card">
+                <div className="section-heading">
+                  <div>
+                    <h2>ML Analysis</h2>
+                    <p>Structured Random Forest classification and feature availability.</p>
+                  </div>
+
+                  <span className="tag">ML + SHAP</span>
+                </div>
+
+                <div className="failure-details">
+                  <div>
+                    <span>Status</span>
+                    <strong>{airflowResult.ml.status}</strong>
+                  </div>
+
+                  <div>
+                    <span>Classification</span>
+                    <strong>{airflowResult.ml.incident_class}</strong>
+                  </div>
+
+                  <div>
+                    <span>Confidence</span>
+                    <strong>
+                      {airflowResult.ml.confidence === null
+                        ? "Unavailable"
+                        : `${(airflowResult.ml.confidence * 100).toFixed(1)}%`}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Feature Availability</span>
+                    <strong>
+                      {airflowResult.ml.missing_features.length === 0
+                        ? "Complete"
+                        : "Incomplete"}
+                    </strong>
+                  </div>
+                </div>
+
+                {airflowResult.ml.missing_features.length > 0 && (
+                  <div className="error-message">
+                    Live Airflow evidence does not currently provide:
+                    {" "}
+                    {airflowResult.ml.missing_features.join(", ")}
+                  </div>
+                )}
+              </div>
+
+              <div className="card">
+                <div className="section-heading">
+                  <div>
+                    <h2>LLM Analysis</h2>
+                    <p>Contextual reasoning over the available Airflow evidence.</p>
+                  </div>
+
+                  <span className="tag">LLM</span>
+                </div>
+
+                <div className="failure-details">
+                  <div>
+                    <span>Status</span>
+                    <strong>{airflowResult.llm.status}</strong>
+                  </div>
+
+                  <div>
+                    <span>Classification</span>
+                    <strong>{airflowResult.llm.incident_class}</strong>
+                  </div>
+
+                  <div>
+                    <span>Confidence</span>
+                    <strong>
+                      {airflowResult.llm.confidence === null
+                        ? "Unavailable"
+                        : `${(airflowResult.llm.confidence * 100).toFixed(1)}%`}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Escalation</span>
+                    <strong>
+                      {airflowResult.llm.escalation_needed ? "Required" : "Not indicated"}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="failure-details">
+                  <div>
+                    <span>Reasoning</span>
+                    <strong>{airflowResult.llm.reasoning}</strong>
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -556,25 +865,32 @@ function App() {
               </div>
             </section>
 
-            {/* Live Analysis Reasons */}
+
+            {/* Supporting Evidence + L1 Investigation */}
             <section className="guidance-grid">
               <div className="card">
                 <div className="section-heading">
                   <div>
-                    <h2>Evidence Analysis</h2>
+                    <h2>Supporting Evidence</h2>
 
-                    <p>Reasons supporting the current assessment.</p>
+                    <p>
+                      Evidence identified by the LLM during contextual analysis.
+                    </p>
                   </div>
+
+                  <span className="tag">LLM</span>
                 </div>
 
                 <ul className="checks">
-                  {airflowResult.analysis.reasons.map((reason, index) => (
-                    <li key={index}>
-                      <span className="check-number">{index + 1}</span>
+                  {(airflowResult.llm.supporting_evidence || []).map(
+                    (evidence, index) => (
+                      <li key={index}>
+                        <span className="check-number">{index + 1}</span>
 
-                      <span>{reason}</span>
-                    </li>
-                  ))}
+                        <span>{evidence}</span>
+                      </li>
+                    )
+                  )}
                 </ul>
               </div>
 
@@ -583,18 +899,22 @@ function App() {
                   <div>
                     <h2>L1 Investigation</h2>
 
-                    <p>Recommended diagnostic checks for the support engineer.</p>
+                    <p>
+                      Recommended diagnostic checks for the support engineer.
+                    </p>
                   </div>
                 </div>
 
                 <ol className="checks">
-                  {airflowResult.guidance.l1_checks.map((check, index) => (
-                    <li key={index}>
-                      <span className="check-number">{index + 1}</span>
+                  {(airflowResult.guidance.l1_checks || []).map(
+                    (check, index) => (
+                      <li key={index}>
+                        <span className="check-number">{index + 1}</span>
 
-                      <span>{check}</span>
-                    </li>
-                  ))}
+                        <span>{check}</span>
+                      </li>
+                    )
+                  )}
                 </ol>
               </div>
             </section>
@@ -655,10 +975,9 @@ function App() {
             <h2>Ready to investigate</h2>
 
             <p>
-              Enter incident evidence and select{" "}
-              <strong>Analyze Incident</strong>, or connect to local Airflow
-              and select <strong>Analyze Live Airflow</strong>.
-            </p>
+            Enter incident evidence and select <strong>Analyze Incident</strong>,
+            or select an Airflow DAG and choose <strong>Analyze Live Airflow</strong>.
+          </p>
           </section>
         )}
       </main>

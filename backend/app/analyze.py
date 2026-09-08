@@ -130,6 +130,58 @@ def analyze_incident(incident: dict) -> dict:
     }
 
 
+def analyze_airflow_with_ml(evidence) -> dict:
+    """
+    Run the Random Forest + SHAP analysis using live Airflow
+    evidence when all required ML features are available.
+
+    Missing live features are not fabricated.
+    """
+
+    bundle = load_model()
+    features = bundle["features"]
+
+    incident = {}
+
+    missing_features = []
+
+    for feature in features:
+        value = getattr(evidence, feature, None)
+
+        if value is None:
+            missing_features.append(feature)
+        else:
+            incident[feature] = value
+
+    # --------------------------------------------------
+    # Live evidence does not contain enough ML features
+    # --------------------------------------------------
+
+    if missing_features:
+        return {
+            "status": "insufficient_features",
+            "incident_class": "Unknown",
+            "confidence": None,
+            "explanation": [],
+            "missing_features": missing_features,
+            "runbook": None,
+            "runbook_status": "not_available",
+            "runbook_content": None,
+            "recommendation": None,
+        }
+
+    # --------------------------------------------------
+    # Run existing ML pipeline
+    # --------------------------------------------------
+
+    result = analyze_incident(incident)
+
+    result["status"] = "success"
+    result["missing_features"] = []
+
+    return result
+
+
 if __name__ == "__main__":
 
     # Example incident
