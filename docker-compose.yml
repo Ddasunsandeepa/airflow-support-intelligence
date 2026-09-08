@@ -3,13 +3,21 @@ services:
   backend:
     image: airflow-support-backend:latest
     container_name: airflow-support-backend
+
+    environment:
+      AIRFLOW_API_URL: http://host.docker.internal:8088
+      AIRFLOW_USERNAME: airflow
+      AIRFLOW_PASSWORD: airflow
+
     ports:
       - "8000:8000"
 
   frontend:
     image: airflow-support-frontend:latest
     container_name: airflow-support-frontend
+
     ports:
       - "5173:80"
+
     depends_on:
       - backend

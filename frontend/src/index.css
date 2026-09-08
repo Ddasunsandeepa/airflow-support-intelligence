@@ -532,3 +532,167 @@ footer {
     gap: 6px;
   }
 }
+
+/* Live Airflow Analysis */
+
+.airflow-button {
+  border: 1px solid #344054;
+  border-radius: 9px;
+  padding: 12px 22px;
+  background: #ffffff;
+  color: #172033;
+  font-weight: 700;
+}
+
+.airflow-button:hover {
+  background: #f2f4f7;
+  border-color: #172033;
+}
+
+.airflow-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.live-airflow-header {
+  margin-top: 20px;
+  padding: 26px;
+  background: #ffffff;
+  border: 1px solid #e1e6eb;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.03);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.live-airflow-header h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.live-airflow-header p:last-child {
+  margin: 7px 0 0;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.incident-status {
+  flex: 0 0 auto;
+  padding: 8px 13px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid #d0d5dd;
+}
+
+.incident-detected {
+  background: #fff6f6;
+  color: #a33a3a;
+  border-color: #f1c0c0;
+}
+
+.no-incident {
+  background: #f6fbf8;
+  color: #18794e;
+  border-color: #b7dfc8;
+}
+
+.airflow-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.evidence-value {
+  min-height: 86px;
+  padding: 15px;
+  border: 1px solid #e1e6eb;
+  border-radius: 10px;
+  background: #fafbfc;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.evidence-value span {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.evidence-value strong {
+  color: #172033;
+  font-size: 15px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.failure-details {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.failure-details > div {
+  padding: 15px;
+  border: 1px solid #e1e6eb;
+  border-radius: 10px;
+  background: #fafbfc;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.failure-details span {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.failure-details strong {
+  color: #172033;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Responsive Live Airflow layout */
+
+@media (max-width: 900px) {
+  .airflow-evidence-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .live-airflow-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 600px) {
+  .action-row {
+    flex-direction: column;
+  }
+
+  .analyze-button,
+  .airflow-button,
+  .reset-button {
+    width: 100%;
+  }
+
+  .airflow-evidence-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .live-airflow-header {
+    padding: 20px;
+  }
+}
