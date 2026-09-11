@@ -14,6 +14,7 @@ function App() {
   const [evidence, setEvidence] = useState(DEFAULT_EVIDENCE);
   const [result, setResult] = useState(null);
   const [airflowResult, setAirflowResult] = useState(null);
+  
 
   const [catalog, setCatalog] = useState({
     registered_dags: [],
@@ -29,6 +30,15 @@ function App() {
   const [airflowLoading, setAirflowLoading] = useState(false);
   const [error, setError] = useState("");
   const [airflowError, setAirflowError] = useState("");
+
+  const [remediationAction, setRemediationAction] = useState(null);
+  const [remediationLoading, setRemediationLoading] = useState(false);
+  const [remediationError, setRemediationError] = useState("");
+
+  const [remediationResult, setRemediationResult] = useState(null);
+
+  const [reanalysisLoading, setReanalysisLoading] = useState(false);
+  const [reanalysisResult, setReanalysisResult] = useState(null);
 
   useEffect(() => {
     const loadAirflowCatalog = async () => {
@@ -205,6 +215,178 @@ function App() {
     await analyzeIncidentSelection(selectedIncident);
   };
 
+  const createRemediationAction = async () => {
+  if (!selectedIncident || selectedIncident.type !== "dag") {
+    setRemediationError(
+      "Controlled remediation is currently available for registered DAG incidents only."
+    );
+    return;
+  }
+
+  setRemediationLoading(true);
+  setRemediationError("");
+  setRemediationAction(null);
+  setRemediationResult(null);
+
+  try {
+    const response = await fetch("/api/actions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action_type: "trigger_dag",
+        dag_id: selectedIncident.id,
+        reason: "Controlled remediation recommended by Airflow Support Intelligence",
+        source: "human_review",
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+
+      throw new Error(
+        errorData?.detail ||
+          `Remediation request failed with status ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+
+    setRemediationAction(data);
+  } catch (err) {
+    setRemediationError(
+      err.message ||
+        "Could not create the controlled remediation action."
+    );
+  } finally {
+    setRemediationLoading(false);
+  }
+};
+
+
+const approveRemediationAction = async () => {
+  if (!remediationAction?.action_id) {
+    return;
+  }
+
+  setRemediationLoading(true);
+  setRemediationError("");
+
+  try {
+    const response = await fetch(
+      `/api/actions/${encodeURIComponent(
+        remediationAction.action_id
+      )}/approve`,
+      {
+        method: "POST",
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+
+      throw new Error(
+        errorData?.detail ||
+          `Approval failed with status ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+
+    setRemediationAction(data);
+  } catch (err) {
+    setRemediationError(
+      err.message || "Could not approve the remediation action."
+    );
+  } finally {
+    setRemediationLoading(false);
+  }
+};
+
+const executeRemediationAction = async () => {
+  if (!remediationAction?.action_id) {
+    return;
+  }
+
+  setRemediationLoading(true);
+  setRemediationError("");
+
+  try {
+    const response = await fetch(
+      `/api/actions/${encodeURIComponent(
+        remediationAction.action_id
+      )}/execute`,
+      {
+        method: "POST",
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+
+      throw new Error(
+        errorData?.detail ||
+          `Execution failed with status ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+
+    setRemediationAction(data.action);
+    setRemediationResult(data.result);
+  } catch (err) {
+    setRemediationError(
+      err.message || "Could not execute the remediation action."
+    );
+  } finally {
+    setRemediationLoading(false);
+  }
+};
+
+const reanalyzeAfterRemediationFailure = async () => {
+  if (!remediationAction?.request?.dag_id) {
+    setRemediationError(
+      "Cannot re-analyze because the remediation target DAG is unavailable."
+    );
+    return;
+  }
+
+  setReanalysisLoading(true);
+  setRemediationError("");
+  setReanalysisResult(null);
+
+  try {
+    const dagId = remediationAction.request.dag_id;
+
+    const response = await fetch(
+      `/api/analyze-airflow?dag_id=${encodeURIComponent(dagId)}`,
+      {
+        method: "POST",
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+
+      throw new Error(
+        errorData?.detail ||
+          `Re-analysis failed with status ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+
+    setReanalysisResult(data);
+  } catch (err) {
+    setRemediationError(
+      err.message ||
+        "Could not re-analyze the latest Airflow evidence."
+    );
+  } finally {
+    setReanalysisLoading(false);
+  }
+};
 
   const resetAnalysis = () => {
     setEvidence(DEFAULT_EVIDENCE);
@@ -947,6 +1129,236 @@ function App() {
 
                 <pre>{airflowResult.guidance.runbook_content}</pre>
               </details>
+            </section>
+
+            {/* Controlled Remediation */}
+            <section className="card remediation-card">
+              <div className="section-heading">
+                <div>
+                  <p className="card-label">V2 CONTROLLED REMEDIATION</p>
+
+                  <h2>Recommended Operational Action</h2>
+
+                  <p>
+                    Actions are validated and require human approval before
+                    execution.
+                  </p>
+                </div>
+
+                <span className="tag">HUMAN-IN-THE-LOOP</span>
+              </div>
+
+              {!remediationAction && (
+                <div className="remediation-start">
+                  <div className="remediation-summary">
+                    <div>
+                      <span>Action</span>
+                      <strong>Trigger DAG</strong>
+                    </div>
+
+                    <div>
+                      <span>Target DAG</span>
+                      <strong>{selectedIncident.id}</strong>
+                    </div>
+
+                    <div>
+                      <span>Risk</span>
+                      <strong>LOW</strong>
+                    </div>
+
+                    <div>
+                      <span>Required Role</span>
+                      <strong>L1</strong>
+                    </div>
+                  </div>
+
+                  <button
+                    className="airflow-button"
+                    onClick={createRemediationAction}
+                    disabled={remediationLoading}
+                  >
+                    {remediationLoading
+                      ? "Preparing Action..."
+                      : "Create Remediation Action"}
+                  </button>
+                </div>
+              )}
+
+              {remediationAction && (
+                <div className="remediation-details">
+                  <div className="remediation-summary">
+                    <div>
+                      <span>Action ID</span>
+                      <strong>{remediationAction.action_id}</strong>
+                    </div>
+
+                    <div>
+                      <span>Status</span>
+                      <strong>
+                        {remediationAction.status}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Risk</span>
+                      <strong>
+                        {remediationAction.validation?.risk_level || "—"}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Required Role</span>
+                      <strong>
+                        {remediationAction.validation?.required_role || "—"}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {remediationAction.status === "pending_approval" && 
+                  remediationAction.validation?.warnings?.length > 0 && (
+                    <div className="error-message">
+                      {remediationAction.validation.warnings.map(
+                        (warning, index) => (
+                          <div key={index}>{warning}</div>
+                        )
+                      )}
+                    </div>
+                  )}
+
+                  {remediationAction.status === "pending_approval" && (
+                    <button
+                      className="airflow-button"
+                      onClick={approveRemediationAction}
+                      disabled={remediationLoading}
+                    >
+                      {remediationLoading
+                        ? "Approving..."
+                        : "Approve Action"}
+                    </button>
+                  )}
+
+                  {remediationAction.status === "approved" && (
+                    <button
+                      className="analyze-button"
+                      onClick={executeRemediationAction}
+                      disabled={remediationLoading}
+                    >
+                      {remediationLoading
+                        ? "Executing..."
+                        : "Execute Approved Action"}
+                    </button>
+                  )}
+
+                  {remediationResult && (
+                    <div className="remediation-result">
+                      <div className="remediation-result-header">
+                        <strong>Execution & Verification</strong>
+                      </div>
+
+                      <div className="remediation-summary">
+                        <div>
+                          <span>Execution</span>
+                          <strong>
+                            {remediationResult.execution?.status || "—"}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span>DAG Run</span>
+                          <strong>
+                            {remediationResult.execution?.dag_run_id || "—"}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span>Verification</span>
+                          <strong>
+                            {remediationResult.verification?.status || "—"}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span>Airflow State</span>
+                          <strong>
+                            {remediationResult.verification?.airflow_state || "—"}
+                          </strong>
+                        </div>
+                      </div>
+
+                      {remediationResult.verification?.status === "verified" && (
+                        <div className="success-message">
+                          Remediation completed and the DAG run was successfully
+                          verified.
+                        </div>
+                      )}
+
+                      {remediationResult.verification?.status === "verification_failed" && (
+                        <div className="error-message">
+                          Remediation was submitted successfully, but verification
+                          detected that the DAG run failed.
+                          <button
+                          className="analyze-button"
+                          onClick={reanalyzeAfterRemediationFailure}
+                          disabled={reanalysisLoading}
+                        >
+                          {reanalysisLoading
+                            ? "Re-analyzing..."
+                            : "Re-analyze Latest Airflow Evidence"}
+                        </button>
+                        </div>
+                      )}
+
+                      {reanalysisResult && (
+                        <div className="remediation-result">
+                          <div className="remediation-result-header">
+                            <strong>Post-Remediation Re-analysis</strong>
+                          </div>
+
+                          <div className="remediation-summary">
+                            <div>
+                              <span>Classification</span>
+                              <strong>
+                                {reanalysisResult.incident_class ||
+                                  reanalysisResult.classification ||
+                                  "—"}
+                              </strong>
+                            </div>
+
+                            <div>
+                              <span>Confidence</span>
+                              <strong>
+                                {reanalysisResult.confidence != null
+                                  ? `${(reanalysisResult.confidence * 100).toFixed(1)}%`
+                                  : "—"}
+                              </strong>
+                            </div>
+
+                            <div>
+                              <span>Status</span>
+                              <strong>
+                                Re-analyzed
+                              </strong>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {remediationResult.verification?.status === "verification_timeout" && (
+                        <div className="error-message">
+                          The DAG run did not reach a terminal state within the
+                          verification window.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {remediationError && (
+                <div className="error-message">
+                  {remediationError}
+                </div>
+              )}
             </section>
 
             {/* Safety */}

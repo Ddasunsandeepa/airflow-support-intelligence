@@ -116,6 +116,76 @@ class AirflowAdapter:
         response.raise_for_status()
         return response.json()
 
+
+    def _action_request(
+        self,
+        method: str,
+        endpoint: str,
+        payload: dict | None = None,
+    ) -> dict:
+        """
+        Send an authenticated request for a controlled Airflow action.
+
+        This method is intentionally kept inside AirflowAdapter so
+        authentication and Airflow API communication remain centralized.
+        """
+
+        url = f"{self.base_url}{endpoint}"
+
+        response = requests.request(
+            method=method,
+            url=url,
+            headers=self._auth_headers(),
+            json=payload,
+            timeout=15,
+        )
+
+        response.raise_for_status()
+
+        if not response.content:
+            return {}
+
+        return response.json()
+
+
+    def trigger_dag(
+        self,
+        dag_id: str,
+        logical_date: str | None = None,
+        conf: dict | None = None,
+    ) -> dict:
+        """
+        Trigger a DAG through the Airflow REST API.
+
+        If logical_date is not supplied, Airflow-compatible current UTC
+        time is generated automatically.
+
+        Only structured parameters are accepted.
+        """
+
+        from datetime import datetime, timezone
+
+        if logical_date is None:
+            logical_date = (
+                datetime.now(timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
+
+        payload = {
+            "logical_date": logical_date,
+        }
+
+        if conf is not None:
+            payload["conf"] = conf
+
+        return self._action_request(
+            "POST",
+            f"/api/v2/dags/{dag_id}/dagRuns",
+            payload,
+        )
+
+
     def get_catalog(self):
         """
         Return the current Airflow incident-selection catalog.

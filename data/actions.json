@@ -1,0 +1,104 @@
+[
+  {
+    "action_id": "05c277f9-15b7-4131-957d-9afc79b469a4",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_kubernetes_failure",
+      "task_id": null,
+      "parameters": {},
+      "reason": "Persistent V2 lifecycle test",
+      "source": "human_review"
+    },
+    "status": "failed",
+    "created_by": "l1-user",
+    "created_at": "2026-09-11T15:52:52.617418Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "8ea7fc1c-9750-477e-be82-0534251adab5",
+      "action_id": "05c277f9-15b7-4131-957d-9afc79b469a4",
+      "decision": "approved",
+      "approved_by": "l1-approver",
+      "approver_role": "L1",
+      "comment": null,
+      "created_at": "2026-09-11T15:53:34.954483Z"
+    }
+  },
+  {
+    "action_id": "34da3d57-e036-4ffb-9a5d-656c82ce82d4",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_kubernetes_failure",
+      "task_id": null,
+      "parameters": {},
+      "reason": "Controlled remediation recommended by Airflow Support Intelligence",
+      "source": "human_review"
+    },
+    "status": "failed",
+    "created_by": "l1-user",
+    "created_at": "2026-09-11T16:16:00.493165Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "0b4f90e0-710d-461a-97c4-057de95979a6",
+      "action_id": "34da3d57-e036-4ffb-9a5d-656c82ce82d4",
+      "decision": "approved",
+      "approved_by": "l1-approver",
+      "approver_role": "L1",
+      "comment": null,
+      "created_at": "2026-09-11T16:16:12.861615Z"
+    }
+  },
+  {
+    "action_id": "842ea194-07d7-43bd-800a-df8bbe6db0d8",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_kubernetes_image_failure",
+      "task_id": null,
+      "parameters": {},
+      "reason": "Controlled remediation recommended by Airflow Support Intelligence",
+      "source": "human_review"
+    },
+    "status": "failed",
+    "created_by": "l1-user",
+    "created_at": "2026-09-11T17:05:52.388677Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "8572b8d5-f521-4ab0-a1a4-399b27197794",
+      "action_id": "842ea194-07d7-43bd-800a-df8bbe6db0d8",
+      "decision": "approved",
+      "approved_by": "l1-approver",
+      "approver_role": "L1",
+      "comment": null,
+      "created_at": "2026-09-11T17:05:54.137515Z"
+    }
+  }
+]

@@ -13,6 +13,16 @@ from backend.app.recommendation import generate_recommendation
 from backend.app.airflow_adapter import AirflowAdapter
 from backend.app.hybrid_analyzer import analyze_hybrid
 
+from backend.app.action_models import (
+    ActionRequest,
+    RemediationAction,
+)
+from backend.app.action_service import ActionService
+from backend.app.actions.airflow import AirflowActionExecutor
+
+from backend.app.approval import approve_action, reject_action
+from backend.app.action_store import ActionStore
+
 
 app = FastAPI(
     title="Airflow Support Intelligence",
@@ -30,6 +40,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --------------------------------------------------
+# V2 Controlled Remediation Service
+# --------------------------------------------------
+
+action_service = ActionService(
+    airflow_executor=AirflowActionExecutor()
+)
+
+action_store = ActionStore()
 
 
 class IncidentEvidence(BaseModel):
@@ -288,6 +308,150 @@ def airflow_evidence():
         "evidence": evidence_to_dict(evidence),
     }
 
+
+@app.post("/actions/{action_id}/approve")
+def approve_remediation_action(
+    action_id: str,
+    approved_by: str = "l1-approver",
+    approver_role: str = "L1",
+    comment: str | None = None,
+):
+    """
+    Approve a validated remediation action.
+    """
+
+    remediation = action_store.get(action_id)
+
+    if remediation is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Action '{action_id}' was not found.",
+        )
+
+    try:
+        remediation = approve_action(
+            remediation=remediation,
+            approved_by=approved_by,
+            approver_role=approver_role,
+            comment=comment,
+        )
+
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=str(exc),
+        ) from exc
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    action_store.save(remediation)
+
+    return remediation.model_dump(mode="json")
+
+
+@app.post("/actions/{action_id}/execute")
+def execute_remediation_action(action_id: str):
+    """
+    Execute an approved remediation action and verify the result.
+    """
+
+    remediation = action_store.get(action_id)
+
+    if remediation is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Action '{action_id}' was not found.",
+        )
+
+    try:
+        result = action_service.execute(remediation)
+
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=str(exc),
+        ) from exc
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        action_store.save(remediation)
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Action execution failed: {exc}",
+        ) from exc
+
+    action_store.save(remediation)
+
+    return {
+        "action": remediation.model_dump(mode="json"),
+        "result": result,
+    }
+
+@app.get("/actions/{action_id}")
+def get_action(action_id: str):
+    """
+    Retrieve the current state of a remediation action.
+    """
+
+    remediation = action_store.get(action_id)
+
+    if remediation is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Action '{action_id}' was not found.",
+        )
+
+    return remediation.model_dump(mode="json")
+
+# --------------------------------------------------
+# V2 Controlled Remediation
+# --------------------------------------------------
+
+@app.post("/actions")
+def create_action(
+    action: ActionRequest,
+    user_role: str = "L1",
+    created_by: str = "l1-user",
+):
+    """
+    Create and validate a controlled remediation action.
+
+    No Airflow action is executed here.
+    """
+
+    adapter = AirflowAdapter()
+
+    catalog = adapter.get_catalog()
+
+    available_dags = {
+        dag.get("dag_id")
+        for dag in catalog.get("dags", [])
+        if dag.get("dag_id")
+    }
+
+    remediation = action_service.create_action(
+        action=action,
+        created_by=created_by,
+    )
+
+    remediation = action_service.validate(
+        remediation=remediation,
+        user_role=user_role,
+        available_dags=available_dags,
+    )
+    action_store.save(remediation)
+
+    return remediation.model_dump(mode="json")
 
 @app.post("/analyze-airflow")
 def analyze_airflow(dag_id: str | None = None):
