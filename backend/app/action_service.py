@@ -3,7 +3,9 @@ from backend.app.action_models import (
     ActionStatus,
     ApprovalDecision,
     RemediationAction,
+    RequiredRole,
 )
+
 from backend.app.action_validator import validate_action
 from backend.app.actions.airflow import AirflowActionExecutor
 from backend.app.verification import VerificationEngine
@@ -22,11 +24,52 @@ class ActionService:
         self,
         action: ActionRequest,
         created_by: str,
+        created_by_role: str = "L1",
     ) -> RemediationAction:
+        resolved_role = created_by_role.strip().upper()
+
+        try:
+            role = RequiredRole(resolved_role)
+        except ValueError as exc:
+            raise ValueError(
+                f"Unsupported user role: {created_by_role}"
+            ) from exc
+
         return RemediationAction(
             request=action,
             created_by=created_by,
+            created_by_role=role,
         )
+        
+    def edit(
+        self,
+        remediation: RemediationAction,
+        parameters: dict,
+        reason: str | None = None,
+    ) -> RemediationAction:
+        if remediation.status not in {
+            ActionStatus.PROPOSED,
+            ActionStatus.PENDING_APPROVAL,
+        }:
+            raise ValueError(
+                f"Action cannot be edited from status "
+                f"'{remediation.status.value}'."
+            )
+
+        if not isinstance(parameters, dict):
+            raise ValueError("Action parameters must be a dictionary.")
+
+        remediation.request.parameters = parameters
+
+        if reason is not None and reason.strip():
+            remediation.request.reason = reason.strip()
+
+        # Editing invalidates the previous validation/approval.
+        remediation.validation = None
+        remediation.approval = None
+        remediation.status = ActionStatus.PROPOSED
+
+        return remediation
 
     def validate(
         self,

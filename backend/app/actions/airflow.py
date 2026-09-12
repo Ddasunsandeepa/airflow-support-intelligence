@@ -63,16 +63,20 @@ class AirflowActionExecutor(ActionExecutor):
             f"{action.action_type.value}"
         )
 
-    def _trigger_dag(
-        self,
-        action: ActionRequest,
-    ) -> dict:
-        """
-        Trigger a DAG through the authenticated AirflowAdapter.
-        """
-
+    def _trigger_dag(self, action: ActionRequest) -> dict:
         logical_date = action.parameters.get("logical_date")
         conf = action.parameters.get("conf")
+
+        if conf is None:
+            supported_parameter_keys = {"mode"}
+
+            filtered_parameters = {
+                key: value
+                for key, value in action.parameters.items()
+                if key in supported_parameter_keys
+            }
+
+            conf = filtered_parameters or None
 
         result = self.adapter.trigger_dag(
             dag_id=action.dag_id,

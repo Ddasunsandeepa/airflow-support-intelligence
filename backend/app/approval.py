@@ -100,11 +100,22 @@ def reject_action(
 ) -> RemediationAction:
     """
     Reject a validated remediation action.
+
+    Rejection is permitted only when:
+    - validation exists
+    - validation succeeded
+    - the action is awaiting a decision
+    - the rejector has the required role
     """
 
     if remediation.validation is None:
         raise ValueError(
             "Action cannot be rejected before validation."
+        )
+
+    if not remediation.validation.valid:
+        raise ValueError(
+            "Action cannot be rejected because validation failed."
         )
 
     if remediation.status not in {
@@ -117,6 +128,17 @@ def reject_action(
         )
 
     resolved_role = _normalise_role(rejector_role)
+
+    required_role = remediation.validation.required_role
+
+    if (
+        ROLE_LEVELS[resolved_role]
+        < ROLE_LEVELS[required_role]
+    ):
+        raise PermissionError(
+            f"Role '{resolved_role.value}' cannot reject this action. "
+            f"Required role: '{required_role.value}'."
+        )
 
     approval = ActionApproval(
         action_id=remediation.action_id,

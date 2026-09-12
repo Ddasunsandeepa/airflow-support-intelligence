@@ -22,6 +22,7 @@ from backend.app.actions.airflow import AirflowActionExecutor
 
 from backend.app.approval import approve_action, reject_action
 from backend.app.action_store import ActionStore
+from backend.app.action_models import ActionRequest, ActionEditRequest
 
 
 app = FastAPI(
@@ -352,6 +353,67 @@ def approve_remediation_action(
 
     return remediation.model_dump(mode="json")
 
+@app.post("/actions/{action_id}/edit")
+def edit_action(
+    action_id: str,
+    edit_request: ActionEditRequest,
+):
+    remediation = action_store.get(action_id)
+
+    if remediation is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Action '{action_id}' was not found.",
+        )
+
+    try:
+        remediation = action_service.edit(
+            remediation=remediation,
+            parameters=edit_request.parameters,
+            reason=edit_request.reason,
+        )
+
+        # Revalidate the edited action.
+        available_dags = set()
+
+        try:
+            adapter = AirflowAdapter()
+            dags_response = adapter.get_dags()
+
+            if isinstance(dags_response, dict):
+                dag_items = dags_response.get("dags", [])
+            elif isinstance(dags_response, list):
+                dag_items = dags_response
+            else:
+                dag_items = []
+
+            available_dags = {
+                dag.get("dag_id")
+                for dag in dag_items
+                if isinstance(dag, dict) and dag.get("dag_id")
+            }
+
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Unable to retrieve Airflow DAG catalog: {exc}",
+            ) from exc
+
+        remediation = action_service.validate(
+            remediation=remediation,
+            user_role=remediation.created_by_role.value,
+            available_dags=available_dags,
+        )
+
+        action_store.save(remediation)
+
+        return remediation.model_dump(mode="json")
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
 
 @app.post("/actions/{action_id}/execute")
 def execute_remediation_action(action_id: str):
@@ -442,6 +504,7 @@ def create_action(
     remediation = action_service.create_action(
         action=action,
         created_by=created_by,
+        created_by_role=user_role,
     )
 
     remediation = action_service.validate(
@@ -458,26 +521,42 @@ def analyze_airflow(dag_id: str | None = None):
     adapter = AirflowAdapter()
 
     # --------------------------------------------------
-    # 1. Collect live Airflow evidence
+    # 1. Collect unified incident evidence
     # --------------------------------------------------
 
-    evidence = adapter.get_evidence(dag_id=dag_id)
+    incident_evidence = adapter.get_incident_evidence(
+        dag_id=dag_id
+    )
 
-    evidence_dict = evidence_to_dict(evidence)
+    airflow_evidence = incident_evidence.airflow
+    kubernetes_evidence = incident_evidence.kubernetes
+
+    airflow_evidence_dict = evidence_to_dict(
+        airflow_evidence
+    )
+
+    kubernetes_evidence_dict = (
+        evidence_to_dict(kubernetes_evidence)
+        if kubernetes_evidence is not None
+        else None
+    )
 
     # --------------------------------------------------
-    # 2. Run ML + SHAP when enough features exist
+    # 2. Run ML + SHAP when enough Airflow features exist
     # --------------------------------------------------
 
-    ml_result = analyze_airflow_with_ml(evidence)
+    ml_result = analyze_airflow_with_ml(
+        airflow_evidence
+    )
 
     # --------------------------------------------------
-    # 3. Run hybrid ML + LLM analysis
+    # 3. Run hybrid ML + LLM + Kubernetes analysis
     # --------------------------------------------------
 
     hybrid_result = analyze_hybrid(
-        evidence=evidence_dict,
+        evidence=airflow_evidence_dict,
         ml_result=ml_result,
+        kubernetes_evidence=kubernetes_evidence,
     )
 
     # --------------------------------------------------
@@ -496,7 +575,7 @@ def analyze_airflow(dag_id: str | None = None):
     )
 
     # --------------------------------------------------
-    # Final response
+    # 5. Final response
     # --------------------------------------------------
 
     return {
@@ -505,8 +584,8 @@ def analyze_airflow(dag_id: str | None = None):
 
         "incident": {
             "detected": (
-                evidence.latest_dag_run_state == "failed"
-                or evidence.failed_task_count > 0
+                airflow_evidence.latest_dag_run_state == "failed"
+                or airflow_evidence.failed_task_count > 0
             ),
             "class": final_class,
             "classification_confidence": final_confidence,
@@ -519,7 +598,9 @@ def analyze_airflow(dag_id: str | None = None):
 
         "llm": llm_result,
 
-        "evidence": evidence_dict,
+        "kubernetes": kubernetes_evidence_dict,
+
+        "evidence": airflow_evidence_dict,
 
         "guidance": {
             "runbook": guidance["runbook"],

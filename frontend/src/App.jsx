@@ -40,6 +40,10 @@ function App() {
   const [reanalysisLoading, setReanalysisLoading] = useState(false);
   const [reanalysisResult, setReanalysisResult] = useState(null);
 
+  const [remediationEditMode, setRemediationEditMode] = useState(false);
+  const [remediationParameters, setRemediationParameters] = useState({});
+  const [remediationReason, setRemediationReason] = useState("");
+
   useEffect(() => {
     const loadAirflowCatalog = async () => {
       setCatalogLoading(true);
@@ -258,6 +262,71 @@ function App() {
     setRemediationError(
       err.message ||
         "Could not create the controlled remediation action."
+    );
+  } finally {
+    setRemediationLoading(false);
+  }
+};
+
+const startRemediationEdit = () => {
+  if (!remediationAction) {
+    return;
+  }
+
+  setRemediationParameters(
+    remediationAction.request?.parameters || {}
+  );
+
+  setRemediationReason(
+    remediationAction.request?.reason || ""
+  );
+
+  setRemediationEditMode(true);
+  setRemediationError("");
+};
+
+const saveRemediationEdit = async () => {
+  if (!remediationAction?.action_id) {
+    return;
+  }
+
+  setRemediationLoading(true);
+  setRemediationError("");
+
+  try {
+    const response = await fetch(
+      `/api/actions/${encodeURIComponent(
+        remediationAction.action_id
+      )}/edit`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          parameters: remediationParameters,
+          reason: remediationReason,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+
+      throw new Error(
+        errorData?.detail ||
+          `Edit failed with status ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+
+    setRemediationAction(data);
+    setRemediationEditMode(false);
+    setRemediationResult(null);
+  } catch (err) {
+    setRemediationError(
+      err.message || "Could not update the remediation action."
     );
   } finally {
     setRemediationLoading(false);
@@ -1226,15 +1295,93 @@ const reanalyzeAfterRemediationFailure = async () => {
                   )}
 
                   {remediationAction.status === "pending_approval" && (
-                    <button
-                      className="airflow-button"
-                      onClick={approveRemediationAction}
-                      disabled={remediationLoading}
-                    >
-                      {remediationLoading
-                        ? "Approving..."
-                        : "Approve Action"}
-                    </button>
+                    <>
+                      {!remediationEditMode && (
+                        <div className="action-row">
+                          <button
+                            className="reset-button"
+                            onClick={startRemediationEdit}
+                            disabled={remediationLoading}
+                          >
+                            Edit Action
+                          </button>
+
+                          <button
+                            className="airflow-button"
+                            onClick={approveRemediationAction}
+                            disabled={remediationLoading}
+                          >
+                            {remediationLoading
+                              ? "Approving..."
+                              : "Approve Action"}
+                          </button>
+                        </div>
+                      )}
+
+                      {remediationEditMode && (
+                        <div className="remediation-edit-form">
+                          <div className="section-heading">
+                            <div>
+                              <h3>Edit Remediation Action</h3>
+
+                              <p>
+                                Modify the action parameters before approval.
+                                The action will be revalidated after saving.
+                              </p>
+                            </div>
+                          </div>
+
+                          <label className="input-group">
+                            <span>Recovery Mode</span>
+
+                            <select
+                              value={remediationParameters.mode || "failure"}
+                              onChange={(event) =>
+                                setRemediationParameters((previous) => ({
+                                  ...previous,
+                                  mode: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="failure">failure</option>
+                              <option value="recovery">recovery</option>
+                            </select>
+                          </label>
+
+                          <label className="input-group">
+                            <span>Reason</span>
+
+                            <textarea
+                              value={remediationReason}
+                              onChange={(event) =>
+                                setRemediationReason(event.target.value)
+                              }
+                              rows={3}
+                            />
+                          </label>
+
+                          <div className="action-row">
+                            <button
+                              className="reset-button"
+                              onClick={() => setRemediationEditMode(false)}
+                              disabled={remediationLoading}
+                            >
+                              Cancel
+                            </button>
+
+                            <button
+                              className="analyze-button"
+                              onClick={saveRemediationEdit}
+                              disabled={remediationLoading}
+                            >
+                              {remediationLoading
+                                ? "Saving..."
+                                : "Save Changes"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {remediationAction.status === "approved" && (
@@ -1318,25 +1465,34 @@ const reanalyzeAfterRemediationFailure = async () => {
                             <div>
                               <span>Classification</span>
                               <strong>
-                                {reanalysisResult.incident_class ||
-                                  reanalysisResult.classification ||
-                                  "—"}
+                                {reanalysisResult.incident?.class || "—"}
                               </strong>
                             </div>
 
                             <div>
                               <span>Confidence</span>
                               <strong>
-                                {reanalysisResult.confidence != null
-                                  ? `${(reanalysisResult.confidence * 100).toFixed(1)}%`
-                                  : "—"}
+                                {reanalysisResult.incident?.classification_confidence == null
+                                  ? "Unavailable"
+                                  : `${(
+                                      reanalysisResult.incident.classification_confidence * 100
+                                    ).toFixed(1)}%`}
                               </strong>
                             </div>
 
                             <div>
-                              <span>Status</span>
+                              <span>Decision</span>
                               <strong>
-                                Re-analyzed
+                                {reanalysisResult.incident?.decision_mode || "—"}
+                              </strong>
+                            </div>
+
+                            <div>
+                              <span>Escalation</span>
+                              <strong>
+                                {reanalysisResult.llm?.escalation_needed
+                                  ? "Required"
+                                  : "Not indicated"}
                               </strong>
                             </div>
                           </div>

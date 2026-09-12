@@ -1,7 +1,11 @@
 import os
 import requests
+import re
 
 from backend.app.evidence import AirflowEvidence
+from backend.app.kubernetes_evidence import KubernetesEvidence
+from backend.app.kubernetes_evidence_parser import parse_kubernetes_evidence
+from backend.app.incident_evidence import IncidentEvidence
 
 
 class AirflowAdapter:
@@ -115,6 +119,122 @@ class AirflowAdapter:
 
         response.raise_for_status()
         return response.json()
+
+    def _extract_synthetic_telemetry(self, task_log: dict) -> dict:
+        """
+        Extract explicitly structured synthetic telemetry from a task log.
+
+        This parser does not invent values. It only returns telemetry
+        when the task log explicitly contains the corresponding fields.
+        """
+
+        extracted = {
+            "cpu_usage": None,
+            "memory_usage": None,
+            "worker_restarts": None,
+            "scheduler_pod_status": None,
+        }
+
+        log_events = task_log.get("content", [])
+
+        if not isinstance(log_events, list):
+            return extracted
+
+        # Combine event/error text into one searchable string.
+        text_parts = []
+
+        for event in log_events:
+            if not isinstance(event, dict):
+                continue
+
+            event_text = event.get("event")
+            if isinstance(event_text, str):
+                text_parts.append(event_text)
+
+            error_details = event.get("error_detail", [])
+
+            if isinstance(error_details, list):
+                for detail in error_details:
+                    if not isinstance(detail, dict):
+                        continue
+
+                    exc_value = detail.get("exc_value")
+
+                    if isinstance(exc_value, str):
+                        text_parts.append(exc_value)
+
+        text = "\n".join(text_parts)
+
+        # ---------------------------------------------------------
+        # CPU usage
+        # Examples:
+        # CPU=96
+        # CPU=96%
+        # cpu_usage=96
+        # ---------------------------------------------------------
+
+        cpu_match = re.search(
+            r"(?:CPU|cpu_usage)\s*=\s*(\d+(?:\.\d+)?)\s*%?",
+            text,
+        )
+
+        if cpu_match:
+            extracted["cpu_usage"] = float(cpu_match.group(1))
+
+        # ---------------------------------------------------------
+        # Memory usage
+        # Examples:
+        # Memory=93
+        # Memory=93%
+        # memory_usage=93
+        # ---------------------------------------------------------
+
+        memory_match = re.search(
+            r"(?:Memory|memory_usage)\s*=\s*(\d+(?:\.\d+)?)\s*%?",
+            text,
+        )
+
+        if memory_match:
+            extracted["memory_usage"] = float(memory_match.group(1))
+
+        # ---------------------------------------------------------
+        # Worker/container restart count
+        # Examples:
+        # WorkerRestarts=3
+        # RestartCount=5
+        # worker_restarts=3
+        # ---------------------------------------------------------
+
+        restart_match = re.search(
+            r"(?:WorkerRestarts|worker_restarts|RestartCount)\s*=\s*(\d+)",
+            text,
+        )
+
+        if restart_match:
+            extracted["worker_restarts"] = int(
+                restart_match.group(1)
+            )
+
+        # ---------------------------------------------------------
+        # Scheduler pod status
+        #
+        # We only map explicit numeric status values here because
+        # AirflowEvidence currently defines this field as Optional[int].
+        # Kubernetes text such as CrashLoopBackOff is not converted
+        # into a fake numeric value.
+        # ---------------------------------------------------------
+
+        scheduler_status_match = re.search(
+            r"(?:SchedulerPodStatus|scheduler_pod_status)\s*=\s*(\d+)",
+            text,
+        )
+
+        if scheduler_status_match:
+            extracted["scheduler_pod_status"] = int(
+                scheduler_status_match.group(1)
+            )
+
+        return extracted
 
 
     def _action_request(
@@ -247,9 +367,50 @@ class AirflowAdapter:
             if dag_parse_times
             else None
         )
-
+        
         # Import errors are separate from registered DAGs.
-        import_error_count = len(import_errors)
+        #
+        # When a specific DAG is requested, count only import errors
+        # belonging to that DAG's file and bundle. Import-error records
+        # do not expose dag_id directly, so we match against the
+        # registered DAG's fileloc and bundle_name.
+        if dag_id:
+            selected_dag = next(
+                (
+                    dag
+                    for dag in dag_list
+                    if dag.get("dag_id") == dag_id
+                ),
+                None,
+            )
+
+            if selected_dag:
+                selected_fileloc = selected_dag.get("fileloc")
+                selected_filename = (
+                    selected_fileloc.rsplit("/", 1)[-1]
+                    if selected_fileloc
+                    else None
+                )
+                selected_bundle_name = selected_dag.get(
+                    "bundle_name"
+                )
+
+                import_error_count = sum(
+                    1
+                    for error in import_errors
+                    if (
+                        error.get("filename") == selected_filename
+                        and error.get("bundle_name")
+                        == selected_bundle_name
+                    )
+                )
+            else:
+                # The requested DAG is not registered, so it should
+                # be handled through the import-error path instead.
+                import_error_count = 0
+        else:
+            # No DAG filter: preserve the global catalog count.
+            import_error_count = len(import_errors)
 
         # ---------------------------------------------------------
         # Inspect the latest run of EVERY selected DAG
@@ -268,6 +429,13 @@ class AirflowAdapter:
         failure_log_event = None
         failure_exception_type = None
         failure_exception_message = None
+
+        extracted_cpu_usage = None
+        extracted_memory_usage = None
+        extracted_worker_restarts = None
+        extracted_scheduler_pod_status = None
+
+        kubernetes_evidence = KubernetesEvidence()
 
         for dag in dag_list:
             current_dag_id = dag.get("dag_id")
@@ -332,6 +500,59 @@ class AirflowAdapter:
                         run_id,
                         failed_task_id,
                         failed_task_try_number,
+                    )
+                    synthetic_telemetry = (
+                        self._extract_synthetic_telemetry(task_log)
+                    )
+                                        # -------------------------------------------------
+                    # Kubernetes evidence extraction
+                    # -------------------------------------------------
+
+                    log_text_parts = []
+
+                    for event in task_log.get("content", []):
+                        if not isinstance(event, dict):
+                            continue
+
+                        event_text = event.get("event")
+
+                        if isinstance(event_text, str):
+                            log_text_parts.append(event_text)
+
+                        error_details = event.get(
+                            "error_detail",
+                            [],
+                        )
+
+                        if isinstance(error_details, list):
+                            for detail in error_details:
+                                if not isinstance(detail, dict):
+                                    continue
+
+                                exc_value = detail.get("exc_value")
+
+                                if isinstance(exc_value, str):
+                                    log_text_parts.append(exc_value)
+
+                    log_text = "\n".join(log_text_parts)
+
+                    kubernetes_evidence = (
+                        parse_kubernetes_evidence(log_text)
+                    )
+                    extracted_cpu_usage = (
+                        synthetic_telemetry["cpu_usage"]
+                    )
+
+                    extracted_memory_usage = (
+                        synthetic_telemetry["memory_usage"]
+                    )
+
+                    extracted_worker_restarts = (
+                        synthetic_telemetry["worker_restarts"]
+                    )
+
+                    extracted_scheduler_pod_status = (
+                        synthetic_telemetry["scheduler_pod_status"]
                     )
 
                     log_events = task_log.get(
@@ -424,12 +645,13 @@ class AirflowAdapter:
             heartbeat_status=1 if scheduler_healthy else 0,
             dag_parse_time=average_parse_time,
 
-            # These are intentionally left as None until real
-            # infrastructure telemetry is connected.
-            scheduler_pod_status=None,
-            worker_restarts=None,
-            cpu_usage=None,
-            memory_usage=None,
+            # Values are populated only when explicitly present in
+            # controlled synthetic task logs. Real infrastructure
+            # telemetry will be connected separately later.
+            scheduler_pod_status=extracted_scheduler_pod_status,
+            worker_restarts=extracted_worker_restarts,
+            cpu_usage=extracted_cpu_usage,
+            memory_usage=extracted_memory_usage,
             recent_changes=None,
 
             dag_count=len(dag_list),
@@ -453,6 +675,48 @@ class AirflowAdapter:
             failure_exception_type=failure_exception_type,
             failure_exception_message=failure_exception_message,
         )
+
+    def get_incident_evidence(
+        self,
+        dag_id: str,
+    ) -> IncidentEvidence:
+        """
+        Collect unified evidence for a selected Airflow incident.
+
+        Airflow evidence remains available through AirflowEvidence,
+        while Kubernetes-related evidence is represented separately
+        through KubernetesEvidence.
+
+        The current Kubernetes source is controlled synthetic task-log
+        evidence. A real Kubernetes adapter can replace this later.
+        """
+
+        airflow_evidence = self.get_evidence(dag_id)
+
+        kubernetes_evidence = self.get_kubernetes_evidence(dag_id)
+
+        return IncidentEvidence(
+            airflow=airflow_evidence,
+            kubernetes=kubernetes_evidence,
+        )
+    
+    def get_kubernetes_evidence(
+        self,
+        dag_id: str,
+    ) -> KubernetesEvidence:
+        """
+        Retrieve Kubernetes-related evidence from the latest
+        failed task log of the selected DAG.
+
+        This currently supports controlled synthetic evidence.
+        Real Kubernetes API telemetry can replace this source later.
+        """
+
+        evidence = self.get_evidence(dag_id)
+
+        message = evidence.failure_exception_message or ""
+
+        return parse_kubernetes_evidence(message)
 
 
 if __name__ == "__main__":

@@ -143,6 +143,8 @@ class RemediationAction(BaseModel):
 
     created_by: str = Field(min_length=1)
 
+    created_by_role: RequiredRole = RequiredRole.L1
+
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
@@ -150,3 +152,7 @@ class RemediationAction(BaseModel):
     validation: Optional[ActionValidationResult] = None
 
     approval: Optional[ActionApproval] = None
+
+class ActionEditRequest(BaseModel):
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+    reason: Optional[str] = None
