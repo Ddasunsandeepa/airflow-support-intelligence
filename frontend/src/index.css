@@ -696,3 +696,223 @@ footer {
     padding: 20px;
   }
 }
+
+/* --------------------------------------------------
+   V2 Controlled Remediation
+   -------------------------------------------------- */
+
+.remediation-card {
+  margin-top: 20px;
+}
+
+.remediation-start,
+.remediation-details {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.remediation-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.remediation-summary > div {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid #e1e6eb;
+  border-radius: 10px;
+  background: #fafbfc;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.remediation-summary span {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.remediation-summary strong {
+  color: #172033;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.remediation-start > .airflow-button {
+  align-self: flex-start;
+}
+
+/* Remediation action controls */
+
+.remediation-details > .action-row {
+  margin-top: 0;
+  flex-wrap: wrap;
+}
+
+.remediation-details .reset-button,
+.remediation-details .airflow-button,
+.remediation-details .analyze-button {
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.remediation-details .reset-button:hover,
+.remediation-details .airflow-button:hover,
+.remediation-details .analyze-button:hover {
+  transform: translateY(-1px);
+}
+
+/* Edit form */
+
+.remediation-edit-form {
+  padding: 20px;
+  border: 1px solid #e1e6eb;
+  border-radius: 12px;
+  background: #fafbfc;
+}
+
+.remediation-edit-form .section-heading {
+  margin-bottom: 20px;
+}
+
+.remediation-edit-form h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.remediation-edit-form .input-group {
+  margin-bottom: 16px;
+}
+
+.remediation-edit-form select,
+.remediation-edit-form textarea {
+  width: 100%;
+  border: 1px solid #d0d5dd;
+  border-radius: 9px;
+  outline: none;
+  background: #ffffff;
+  color: #172033;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.remediation-edit-form select {
+  height: 44px;
+  padding: 0 12px;
+}
+
+.remediation-edit-form textarea {
+  min-height: 90px;
+  padding: 12px 14px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.remediation-edit-form select:focus,
+.remediation-edit-form textarea:focus {
+  border-color: #667085;
+  box-shadow: 0 0 0 3px rgba(102, 112, 133, 0.08);
+}
+
+.remediation-edit-form .action-row {
+  margin-top: 20px;
+}
+
+/* Execution and verification */
+
+.remediation-result {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid #e1e6eb;
+  border-radius: 12px;
+  background: #fafbfc;
+}
+
+.remediation-result-header {
+  margin-bottom: 16px;
+}
+
+.remediation-result-header strong {
+  font-size: 16px;
+  color: #172033;
+}
+
+.remediation-result .remediation-summary {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* Success state */
+
+.success-message {
+  margin-top: 16px;
+  padding: 13px 15px;
+  border: 1px solid #b7dfc8;
+  border-radius: 9px;
+  background: #f6fbf8;
+  color: #18794e;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+
+/* Error state inside remediation */
+
+.remediation-result .error-message {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.remediation-result .error-message .analyze-button {
+  margin-top: 0;
+}
+
+/* --------------------------------------------------
+   Responsive V2 Remediation
+   -------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .remediation-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .remediation-result .remediation-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .remediation-summary,
+  .remediation-result .remediation-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .remediation-start > .airflow-button {
+    width: 100%;
+  }
+
+  .remediation-edit-form {
+    padding: 16px;
+  }
+
+  .remediation-result {
+    padding: 16px;
+  }
+
+  .remediation-result .error-message {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .remediation-result .error-message .analyze-button {
+    width: 100%;
+  }
+}

@@ -24,6 +24,8 @@ from backend.app.approval import approve_action, reject_action
 from backend.app.action_store import ActionStore
 from backend.app.action_models import ActionRequest, ActionEditRequest
 
+from backend.app.action_models import ActionType
+from backend.app.action_registry import get_action_policy
 
 app = FastAPI(
     title="Airflow Support Intelligence",
@@ -109,6 +111,52 @@ def build_guidance(final_class, final_confidence, ml_result, llm_result):
     }
 
 
+def build_remediation_recommendation(final_class):
+    """
+    Build a controlled remediation recommendation from the
+    final incident classification.
+
+    This layer selects only predefined actions from the
+    Action Registry. It does not execute anything.
+    """
+
+    action_by_incident_class = {
+        "Scheduler": ActionType.TRIGGER_DAG,
+        "Resource": ActionType.TRIGGER_DAG,
+        "Kubernetes": ActionType.TRIGGER_DAG,
+        "Configuration": ActionType.TRIGGER_DAG,
+    }
+
+    action_type = action_by_incident_class.get(final_class)
+
+    if action_type is None:
+        return {
+            "available": False,
+            "action_type": None,
+            "label": None,
+            "reason": (
+                "No controlled remediation action is recommended "
+                "for this incident classification."
+            ),
+            "risk_level": None,
+            "required_role": None,
+            "approval_required": None,
+        }
+
+    policy = get_action_policy(action_type)
+
+    return {
+        "available": True,
+        "action_type": action_type.value,
+        "label": "Trigger DAG",
+        "reason": (
+            f"Controlled remediation recommended for the "
+            f"{final_class} incident."
+        ),
+        "risk_level": policy.risk_level.value,
+        "required_role": policy.required_role.value,
+        "approval_required": policy.approval_required,
+    }
 
 # --------------------------------------------------
 # Automatic live incident detection
@@ -353,6 +401,49 @@ def approve_remediation_action(
 
     return remediation.model_dump(mode="json")
 
+@app.post("/actions/{action_id}/reject")
+def reject_remediation_action(
+    action_id: str,
+    rejected_by: str = "l1-user",
+    rejector_role: str = "L1",
+    comment: str | None = None,
+):
+    """
+    Reject a validated remediation action.
+    """
+
+    remediation = action_store.get(action_id)
+
+    if remediation is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Action '{action_id}' was not found.",
+        )
+
+    try:
+        remediation = reject_action(
+            remediation=remediation,
+            rejected_by=rejected_by,
+            rejector_role=rejector_role,
+            comment=comment,
+        )
+
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=str(exc),
+        ) from exc
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    action_store.save(remediation)
+
+    return remediation.model_dump(mode="json")
+
 @app.post("/actions/{action_id}/edit")
 def edit_action(
     action_id: str,
@@ -574,6 +665,10 @@ def analyze_airflow(dag_id: str | None = None):
         llm_result=llm_result,
     )
 
+    remediation_recommendation = build_remediation_recommendation(
+    final_class
+    )
+
     # --------------------------------------------------
     # 5. Final response
     # --------------------------------------------------
@@ -610,6 +705,8 @@ def analyze_airflow(dag_id: str | None = None):
         },
 
         "escalation": guidance["escalation"],
+
+        "remediation_recommendation": remediation_recommendation,
     }
 
 

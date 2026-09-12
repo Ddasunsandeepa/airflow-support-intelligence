@@ -373,6 +373,46 @@ const approveRemediationAction = async () => {
   }
 };
 
+const rejectRemediationAction = async () => {
+  if (!remediationAction?.action_id) {
+    return;
+  }
+
+  setRemediationLoading(true);
+  setRemediationError("");
+
+  try {
+    const response = await fetch(
+      `/api/actions/${encodeURIComponent(
+        remediationAction.action_id
+      )}/reject`,
+      {
+        method: "POST",
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+
+      throw new Error(
+        errorData?.detail ||
+          `Rejection failed with status ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+
+    setRemediationAction(data);
+    setRemediationResult(null);
+  } catch (err) {
+    setRemediationError(
+      err.message || "Could not reject the remediation action."
+    );
+  } finally {
+    setRemediationLoading(false);
+  }
+};
+
 const executeRemediationAction = async () => {
   if (!remediationAction?.action_id) {
     return;
@@ -1307,12 +1347,22 @@ const reanalyzeAfterRemediationFailure = async () => {
                           </button>
 
                           <button
+                            className="reset-button"
+                            onClick={rejectRemediationAction}
+                            disabled={remediationLoading}
+                          >
+                            {remediationLoading
+                              ? "Processing..."
+                              : "Reject Action"}
+                          </button>
+
+                          <button
                             className="airflow-button"
                             onClick={approveRemediationAction}
                             disabled={remediationLoading}
                           >
                             {remediationLoading
-                              ? "Approving..."
+                              ? "Processing..."
                               : "Approve Action"}
                           </button>
                         </div>
