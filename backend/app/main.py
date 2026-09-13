@@ -728,20 +728,36 @@ def developer_chat(request: DeveloperChatRequest):
     Analyze a developer's Airflow question using live incident
     evidence.
 
+    Supports both registered DAGs and DAG parsing/import errors.
+
     The Developer Copilot is advisory only. It does not modify
     DAG source files or execute operational actions.
     """
 
-    if not request.dag_id:
+    if request.incident_type == "dag" and not request.dag_id:
         raise HTTPException(
             status_code=400,
-            detail="dag_id is required for Developer Copilot analysis.",
+            detail="dag_id is required for DAG incidents.",
+        )
+
+    if (
+        request.incident_type == "import_error"
+        and not request.import_error_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "import_error_id is required for "
+                "import-error incidents."
+            ),
         )
 
     try:
         return analyze_developer_request(
             message=request.message,
+            incident_type=request.incident_type,
             dag_id=request.dag_id,
+            import_error_id=request.import_error_id,
         )
 
     except ValueError as exc:

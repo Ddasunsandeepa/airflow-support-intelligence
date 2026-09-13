@@ -89,6 +89,48 @@ def _build_evidence_summary(evidence, kubernetes_evidence):
 
     return statements
 
+def _build_import_error_evidence_summary(error):
+    """
+    Build concise developer-facing evidence statements for
+    an Airflow DAG parsing/import error.
+    """
+
+    statements = []
+
+    filename = error.get("filename")
+    bundle_name = error.get("bundle_name")
+    timestamp = error.get("timestamp")
+    stack_trace = (
+        error.get("stack_trace")
+        or error.get("error")
+        or error.get("message")
+    )
+
+    if filename:
+        statements.append(
+            f"Import error filename: {filename}"
+        )
+
+    if bundle_name:
+        statements.append(
+            f"Airflow bundle: {bundle_name}"
+        )
+
+    if timestamp:
+        statements.append(
+            f"Import error timestamp: {timestamp}"
+        )
+
+    statements.append(
+        "Failure event: DAG import/parsing error"
+    )
+
+    if stack_trace:
+        statements.append(
+            f"Import error stack trace: {stack_trace}"
+        )
+
+    return statements
 
 def _build_recommended_fix(incident_class):
     """
@@ -210,10 +252,16 @@ def _build_tests(incident_class):
 
 def analyze_developer_request(
     message: str,
-    dag_id: str,
+    incident_type: str = "dag",
+    dag_id: str | None = None,
+    import_error_id: str | None = None,
 ) -> DeveloperChatResponse:
     """
     Analyze a developer request using live Airflow evidence.
+
+    The Copilot supports:
+    - registered DAG incidents
+    - DAG parsing/import errors
 
     The Copilot is advisory only. It does not modify DAG source
     files or execute operational actions.
@@ -222,39 +270,103 @@ def analyze_developer_request(
     if not message.strip():
         raise ValueError("Developer message cannot be empty.")
 
-    if not dag_id.strip():
-        raise ValueError("dag_id is required.")
+    if incident_type not in {"dag", "import_error"}:
+        raise ValueError(
+            "Unsupported incident type. "
+            "Expected 'dag' or 'import_error'."
+        )
 
     adapter = AirflowAdapter()
 
-    incident_evidence = adapter.get_incident_evidence(
-        dag_id=dag_id
-    )
+    # --------------------------------------------------
+    # Registered DAG investigation
+    # --------------------------------------------------
 
-    airflow_evidence = incident_evidence.airflow
-    kubernetes_evidence = incident_evidence.kubernetes
+    if incident_type == "dag":
+        if not dag_id or not dag_id.strip():
+            raise ValueError(
+                "dag_id is required for DAG incidents."
+            )
 
-    evidence_dict = _evidence_to_dict(
-        airflow_evidence
-    )
+        incident_evidence = adapter.get_incident_evidence(
+            dag_id=dag_id
+        )
 
-    ml_result = analyze_airflow_with_ml(
-        airflow_evidence
-    )
+        airflow_evidence = incident_evidence.airflow
+        kubernetes_evidence = incident_evidence.kubernetes
 
-    hybrid_result = analyze_hybrid(
-        evidence=evidence_dict,
-        ml_result=ml_result,
-        kubernetes_evidence=kubernetes_evidence,
-    )
+        evidence_dict = _evidence_to_dict(
+            airflow_evidence
+        )
 
-    incident_class = hybrid_result["final_class"]
-    confidence = hybrid_result["final_confidence"]
+        ml_result = analyze_airflow_with_ml(
+            airflow_evidence
+        )
 
-    evidence_summary = _build_evidence_summary(
-        airflow_evidence,
-        kubernetes_evidence,
-    )
+        hybrid_result = analyze_hybrid(
+            evidence=evidence_dict,
+            ml_result=ml_result,
+            kubernetes_evidence=kubernetes_evidence,
+        )
+
+        incident_class = hybrid_result["final_class"]
+        confidence = hybrid_result["final_confidence"]
+
+        evidence_summary = _build_evidence_summary(
+            airflow_evidence,
+            kubernetes_evidence,
+        )
+
+        incident_reference = dag_id
+
+    # --------------------------------------------------
+    # DAG parsing/import error investigation
+    # --------------------------------------------------
+
+    else:
+        if not import_error_id or not import_error_id.strip():
+            raise ValueError(
+                "import_error_id is required for import-error incidents."
+            )
+
+        try:
+            import_error = adapter.get_import_error(
+                import_error_id
+            )
+        except Exception as exc:
+            raise ValueError(
+                f"Unable to retrieve Airflow import error: {exc}"
+            ) from exc
+
+        evidence_summary = _build_import_error_evidence_summary(
+            import_error
+        )
+
+        # An Airflow import-error record is itself direct evidence
+        # that the failure occurred during DAG parsing/import.
+        incident_class = "DAG Parsing"
+
+        # This is a deterministic classification from the Airflow
+        # import-error source, not a calibrated ML probability.
+        confidence = None
+
+        airflow_evidence = None
+
+        incident_reference = (
+            import_error.get("filename")
+            or f"import_error:{import_error_id}"
+        )
+
+        ml_result = {
+            "status": "not_applicable",
+            "incident_class": "DAG Parsing",
+            "confidence": None,
+            "explanation": [],
+        }
+
+    # --------------------------------------------------
+    # Common developer reasoning
+    # --------------------------------------------------
 
     diagnosis = DiagnosisResult(
         incident_class=incident_class,
@@ -275,12 +387,13 @@ def analyze_developer_request(
     )
 
     tests_to_run = _build_tests(
-    incident_class
+        incident_class
     )
 
     developer_llm_result = analyze_with_developer_llm(
         message=message,
-        dag_id=dag_id,
+        incident_type=incident_type,
+        incident_reference=incident_reference,
         evidence=evidence_summary,
         incident_class=incident_class,
         confidence=confidence,
@@ -306,18 +419,19 @@ def analyze_developer_request(
                 summary=developer_llm_result[
                     "code_change_summary"
                 ],
-                
                 reason=(
                     developer_llm_result["code_change_summary"]
                     or code_change.reason
                 ),
             )
+
     else:
         final_summary = diagnosis.summary
+
         final_reasoning = (
             "The response is based on the structured Airflow "
-            "evidence and hybrid incident analysis. "
-            "Developer-specific LLM reasoning is unavailable."
+            "evidence. Developer-specific LLM reasoning is "
+            "currently unavailable."
         )
 
         final_recommended_fix = recommended_fix
@@ -325,7 +439,9 @@ def analyze_developer_request(
     return DeveloperChatResponse(
         status="success",
         message=message,
+        incident_type=incident_type,
         dag_id=dag_id,
+        import_error_id=import_error_id,
         diagnosis=DiagnosisResult(
             incident_class=incident_class,
             summary=final_summary,

@@ -6,7 +6,8 @@ from openai import OpenAI
 
 def build_developer_prompt(
     message: str,
-    dag_id: str,
+    incident_type: str,
+    incident_reference: str,
     evidence: list[str],
     incident_class: str,
     confidence: float | None,
@@ -30,6 +31,12 @@ def build_developer_prompt(
         else "unknown"
     )
 
+    incident_label = (
+        "Registered Airflow DAG"
+        if incident_type == "dag"
+        else "Airflow DAG parsing/import error"
+    )
+
     return f"""
 You are an Airflow Developer Copilot.
 
@@ -40,8 +47,11 @@ changed.
 Developer request:
 {message}
 
-DAG:
-{dag_id}
+Incident type:
+{incident_label}
+
+Incident reference:
+{incident_reference}
 
 Incident classification:
 {incident_class}
@@ -65,12 +75,14 @@ IMPORTANT RULES:
 5. Do not claim that correlation proves causation.
 6. Do not recommend changing source code when the evidence
    indicates an infrastructure-only problem.
-7. Do not directly modify Airflow files.
-8. Do not execute shell commands, kubectl commands, Python
+7. For DAG parsing/import errors, source-code or dependency
+   investigation may be appropriate when the evidence supports it.
+8. Do not directly modify Airflow files.
+9. Do not execute shell commands, kubectl commands, Python
    code, deployments, or production changes.
-9. If a code change may be appropriate, explain why before
-   proposing it.
-10. Keep the answer useful to a software engineer.
+10. If a code change may be appropriate, explain why before
+    proposing it.
+11. Keep the answer useful to a software engineer.
 
 Return ONLY valid JSON using this structure:
 
@@ -90,7 +102,8 @@ Return ONLY valid JSON using this structure:
 
 def analyze_with_developer_llm(
     message: str,
-    dag_id: str,
+    incident_type: str,
+    incident_reference: str,
     evidence: list[str],
     incident_class: str,
     confidence: float | None,
@@ -126,7 +139,8 @@ def analyze_with_developer_llm(
 
     prompt = build_developer_prompt(
         message=message,
-        dag_id=dag_id,
+        incident_type=incident_type,
+        incident_reference=incident_reference,
         evidence=evidence,
         incident_class=incident_class,
         confidence=confidence,

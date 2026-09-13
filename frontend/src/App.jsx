@@ -303,13 +303,6 @@ const startRemediationEdit = () => {
 const askDeveloperCopilot = async () => {
   if (!developerMessage.trim()) return;
 
-  if (selectedIncident.type !== "dag") {
-    setDeveloperError(
-      "Developer Copilot currently works with registered DAGs only."
-    );
-    return;
-  }
-
   const userMessage = developerMessage.trim();
 
   setDeveloperChat((previous) => [
@@ -325,15 +318,25 @@ const askDeveloperCopilot = async () => {
   setDeveloperError("");
 
   try {
+    const requestBody =
+      selectedIncident.type === "import_error"
+        ? {
+            message: userMessage,
+            incident_type: "import_error",
+            import_error_id: selectedIncident.id,
+          }
+        : {
+            message: userMessage,
+            incident_type: "dag",
+            dag_id: selectedIncident.id,
+          };
+
     const response = await fetch("/api/developer/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        message: userMessage,
-        dag_id: selectedIncident.id,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -341,7 +344,7 @@ const askDeveloperCopilot = async () => {
 
       throw new Error(
         errorData?.detail ||
-        `Developer Copilot failed with status ${response.status}`
+          `Developer Copilot failed with status ${response.status}`
       );
     }
 
@@ -357,7 +360,7 @@ const askDeveloperCopilot = async () => {
   } catch (err) {
     setDeveloperError(
       err.message ||
-      "Unable to connect to Developer Copilot."
+        "Unable to connect to Developer Copilot."
     );
   } finally {
     setDeveloperLoading(false);
@@ -1441,13 +1444,19 @@ const reanalyzeAfterRemediationFailure = async () => {
                               <div className="copilot-block">
                                 <h4>Code Change Proposal</h4>
 
-                                <p>
-                                  {chat.data.code_change.summary}
-                                </p>
+                                {chat.data.code_change.summary && (
+                                  <p>
+                                    {chat.data.code_change.summary}
+                                  </p>
+                                )}
 
-                                <p className="code-reason">
-                                  {chat.data.code_change.reason}
-                                </p>
+                                {chat.data.code_change.reason &&
+                                  chat.data.code_change.reason !==
+                                    chat.data.code_change.summary && (
+                                    <p className="code-reason">
+                                      {chat.data.code_change.reason}
+                                    </p>
+                                  )}
                               </div>
                             )}
 
@@ -1514,8 +1523,7 @@ const reanalyzeAfterRemediationFailure = async () => {
                     onClick={askDeveloperCopilot}
                     disabled={
                       developerLoading ||
-                      !developerMessage.trim() ||
-                      selectedIncident.type !== "dag"
+                      !developerMessage.trim()
                     }
                     className="developer-send-btn"
                   >
