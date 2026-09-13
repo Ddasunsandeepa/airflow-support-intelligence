@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from pydantic import BaseModel, Field
 
@@ -6,10 +6,19 @@ from pydantic import BaseModel, Field
 class DeveloperChatRequest(BaseModel):
     """
     Request submitted to the Airflow Developer Copilot.
+
+    The Copilot can investigate either:
+    - a registered Airflow DAG
+    - an Airflow DAG parsing/import error
     """
 
     message: str = Field(min_length=1)
+
+    incident_type: Literal["dag", "import_error"] = "dag"
+
     dag_id: Optional[str] = None
+
+    import_error_id: Optional[str] = None
 
 
 class DiagnosisResult(BaseModel):
@@ -43,7 +52,10 @@ class DeveloperChatResponse(BaseModel):
 
     status: str
     message: str
+    incident_type: str = "dag"
+
     dag_id: Optional[str] = None
+    import_error_id: Optional[str] = None
 
     diagnosis: Optional[DiagnosisResult] = None
 
