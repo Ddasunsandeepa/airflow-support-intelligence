@@ -2828,5 +2828,1312 @@
       "comment": "Approved for controlled recovery test.",
       "created_at": "2026-09-12T14:02:16.538066Z"
     }
+  },
+  {
+    "action_id": "c7c79fb1-0f0b-4b54-8de6-7c642ba35b31",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T14:26:28.895962Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "675fbd60-5318-4a1c-9927-fe7201573ace",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "does_not_exist",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "proposed",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T14:26:28.923970Z",
+    "validation": {
+      "valid": false,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [
+        "DAG 'does_not_exist' was not found in the available Airflow DAG catalog."
+      ],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "bcf6a5d0-570c-4d59-b2a8-3a0fbdd4c644",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "approved",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T14:26:28.937766Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "538fb440-c139-400b-9377-7e1d9383513d",
+      "action_id": "bcf6a5d0-570c-4d59-b2a8-3a0fbdd4c644",
+      "decision": "approved",
+      "approved_by": "test-approver",
+      "approver_role": "L1",
+      "comment": "Approved for test.",
+      "created_at": "2026-09-12T14:26:28.948777Z"
+    }
+  },
+  {
+    "action_id": "8ac7409c-f55a-4af5-982e-0ad63c956082",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T14:26:28.962303Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "001a9f3c-17be-4558-aad3-12695b3e41d3",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T14:26:28.983293Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "4190f663-6044-4e29-89ba-6f6068d06d4e",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Controlled recovery test.",
+      "source": "test"
+    },
+    "status": "succeeded",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T14:26:29.235823Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "f91218fa-59df-46e1-9969-8ede72f6ac0c",
+      "action_id": "4190f663-6044-4e29-89ba-6f6068d06d4e",
+      "decision": "approved",
+      "approved_by": "test-approver",
+      "approver_role": "L1",
+      "comment": "Approved for controlled recovery test.",
+      "created_at": "2026-09-12T14:26:29.251463Z"
+    }
+  },
+  {
+    "action_id": "0452c0d6-0b62-4adc-83f5-06b99237f3a8",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_kubernetes_failure",
+      "task_id": null,
+      "parameters": {},
+      "reason": "Controlled remediation recommended for the Kubernetes incident.",
+      "source": "human_review"
+    },
+    "status": "pending_approval",
+    "created_by": "l1-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T14:27:56.948828Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "f30be8d7-5ea7-475a-9b96-8b6c5638a0e0",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_kubernetes_config_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Controlled remediation recommended for the Kubernetes incident.",
+      "source": "human_review"
+    },
+    "status": "failed",
+    "created_by": "l1-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T15:59:03.542802Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "a460fe9b-6cc6-4590-a139-4374648dfb78",
+      "action_id": "f30be8d7-5ea7-475a-9b96-8b6c5638a0e0",
+      "decision": "approved",
+      "approved_by": "l1-approver",
+      "approver_role": "L1",
+      "comment": null,
+      "created_at": "2026-09-12T15:59:16.825192Z"
+    }
+  },
+  {
+    "action_id": "1fe92468-8c89-471d-a1f7-d9ec22ade45c",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_controlled_recovery",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Controlled remediation recommended for the Kubernetes incident.",
+      "source": "human_review"
+    },
+    "status": "succeeded",
+    "created_by": "l1-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:30:40.105190Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "c5b39b18-3e26-4f92-b763-5f4b8d305bcc",
+      "action_id": "1fe92468-8c89-471d-a1f7-d9ec22ade45c",
+      "decision": "approved",
+      "approved_by": "l1-approver",
+      "approver_role": "L1",
+      "comment": null,
+      "created_at": "2026-09-12T16:30:50.065631Z"
+    }
+  },
+  {
+    "action_id": "932038c4-eb0a-4280-a5f7-aa7bea002d5b",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:44:35.953700Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "1f0c966c-5814-48da-ac71-f67a1b441aa1",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "does_not_exist",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "proposed",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:44:35.964754Z",
+    "validation": {
+      "valid": false,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [
+        "DAG 'does_not_exist' was not found in the available Airflow DAG catalog."
+      ],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "2e461073-64c1-48c8-98d9-36f23fef3752",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "approved",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:44:35.973479Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "9d65cb9c-50bb-465e-95e4-ecef6bc0a930",
+      "action_id": "2e461073-64c1-48c8-98d9-36f23fef3752",
+      "decision": "approved",
+      "approved_by": "test-approver",
+      "approver_role": "L1",
+      "comment": "Approved for test.",
+      "created_at": "2026-09-12T16:44:35.982915Z"
+    }
+  },
+  {
+    "action_id": "4512f633-693e-4d6b-b490-920f14678c7f",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:44:35.994650Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "8d62726c-0134-40d9-a821-f62c3b601abc",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:44:36.012479Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "7b8be0cd-d4f9-4631-a1bb-957daa0cc19c",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Controlled recovery test.",
+      "source": "test"
+    },
+    "status": "succeeded",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:44:36.207380Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "0f5c8f31-e50e-4daa-b874-90e5b39bf8f8",
+      "action_id": "7b8be0cd-d4f9-4631-a1bb-957daa0cc19c",
+      "decision": "approved",
+      "approved_by": "test-approver",
+      "approver_role": "L1",
+      "comment": "Approved for controlled recovery test.",
+      "created_at": "2026-09-12T16:44:36.225644Z"
+    }
+  },
+  {
+    "action_id": "f092176b-8bd7-4781-93f6-0d49e3403cd3",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:46:11.651492Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "8c0a85f0-c7ab-4ed7-a621-dd2c7bd271aa",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "does_not_exist",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "proposed",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:46:11.664178Z",
+    "validation": {
+      "valid": false,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [
+        "DAG 'does_not_exist' was not found in the available Airflow DAG catalog."
+      ],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "d875cc84-b064-453d-8c31-0ccb1793b145",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "approved",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:46:11.677268Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "dacdd63a-3f15-4dde-b817-3bd24f703cb4",
+      "action_id": "d875cc84-b064-453d-8c31-0ccb1793b145",
+      "decision": "approved",
+      "approved_by": "test-approver",
+      "approver_role": "L1",
+      "comment": "Approved for test.",
+      "created_at": "2026-09-12T16:46:11.687892Z"
+    }
+  },
+  {
+    "action_id": "0086f802-ca33-4c75-a453-245958bb1a22",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:46:11.701648Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "0ee77968-78a9-4b6a-a1f3-c6e27d269c4b",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:46:11.718993Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "217847d0-ea67-4288-88ff-5c33275beabc",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Controlled recovery test.",
+      "source": "test"
+    },
+    "status": "succeeded",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:46:11.908783Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "7aa7e184-b03f-4f81-ba97-ce8fa4bdd361",
+      "action_id": "217847d0-ea67-4288-88ff-5c33275beabc",
+      "decision": "approved",
+      "approved_by": "test-approver",
+      "approver_role": "L1",
+      "comment": "Approved for controlled recovery test.",
+      "created_at": "2026-09-12T16:46:11.922267Z"
+    }
+  },
+  {
+    "action_id": "a2df6a1e-ba11-4072-812d-a8084d97371c",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:55:03.174945Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "e3044e0b-06e7-4efd-ac1a-90e58e10ba0a",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "does_not_exist",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "proposed",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:55:03.188062Z",
+    "validation": {
+      "valid": false,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [
+        "DAG 'does_not_exist' was not found in the available Airflow DAG catalog."
+      ],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "d690ee5d-02a3-428f-b7c2-498d86c355a5",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "approved",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:55:03.201537Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "4a6972b9-2d0d-4d92-9506-186d34d3aa2a",
+      "action_id": "d690ee5d-02a3-428f-b7c2-498d86c355a5",
+      "decision": "approved",
+      "approved_by": "test-approver",
+      "approver_role": "L1",
+      "comment": "Approved for test.",
+      "created_at": "2026-09-12T16:55:03.212216Z"
+    }
+  },
+  {
+    "action_id": "d17f38fb-84b7-471f-95e9-80eddaeb118f",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:55:03.226802Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "f58ea194-5a5f-4ae0-97bc-f7353171d5e5",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:55:03.244033Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "7322ca46-bdf4-476b-b164-d7aa6eacfecf",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Controlled recovery test.",
+      "source": "test"
+    },
+    "status": "succeeded",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T16:55:03.449665Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "147dd63d-cb91-4a4b-9533-34b81e958537",
+      "action_id": "7322ca46-bdf4-476b-b164-d7aa6eacfecf",
+      "decision": "approved",
+      "approved_by": "test-approver",
+      "approver_role": "L1",
+      "comment": "Approved for controlled recovery test.",
+      "created_at": "2026-09-12T16:55:03.462245Z"
+    }
+  },
+  {
+    "action_id": "72c1d186-089e-4b6c-bb21-30dc5de05584",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T17:02:28.363357Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "9c81b6c1-86ab-4510-a9b8-eb2808bc67eb",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "does_not_exist",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "proposed",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T17:02:28.381321Z",
+    "validation": {
+      "valid": false,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [
+        "DAG 'does_not_exist' was not found in the available Airflow DAG catalog."
+      ],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "8614590b-c074-471e-960d-1a99af477cde",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "approved",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T17:02:28.395935Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "9f500b0c-739c-4548-baf4-d8cce5a4c8a9",
+      "action_id": "8614590b-c074-471e-960d-1a99af477cde",
+      "decision": "approved",
+      "approved_by": "test-approver",
+      "approver_role": "L1",
+      "comment": "Approved for test.",
+      "created_at": "2026-09-12T17:02:28.409406Z"
+    }
+  },
+  {
+    "action_id": "8075d20d-7cd4-49fb-bad3-4b42b7e5befe",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T17:02:28.424263Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "c31f29d1-b043-47f4-a65f-535568d4685a",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T17:02:28.442342Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "8c0bd0d8-f3d9-4518-bd44-4f05149b51b6",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Controlled recovery test.",
+      "source": "test"
+    },
+    "status": "succeeded",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T17:02:28.651385Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "fb1e0292-2f57-4b1f-9616-6249364dd65c",
+      "action_id": "8c0bd0d8-f3d9-4518-bd44-4f05149b51b6",
+      "decision": "approved",
+      "approved_by": "test-approver",
+      "approver_role": "L1",
+      "comment": "Approved for controlled recovery test.",
+      "created_at": "2026-09-12T17:02:28.664200Z"
+    }
+  },
+  {
+    "action_id": "2a244bb0-e1fc-4d41-9c7d-4027cc45dccb",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T17:08:17.601323Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "2be6ffc4-2154-4ab2-8b14-7ea13f72d260",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "does_not_exist",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "proposed",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T17:08:17.615316Z",
+    "validation": {
+      "valid": false,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [
+        "DAG 'does_not_exist' was not found in the available Airflow DAG catalog."
+      ],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "d0a3a3df-b5e1-4b38-8da7-8a470c0ac6d5",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "approved",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T17:08:17.627661Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "86687dd5-09ad-40f2-946a-1847aad0ac56",
+      "action_id": "d0a3a3df-b5e1-4b38-8da7-8a470c0ac6d5",
+      "decision": "approved",
+      "approved_by": "test-approver",
+      "approver_role": "L1",
+      "comment": "Approved for test.",
+      "created_at": "2026-09-12T17:08:17.639428Z"
+    }
+  },
+  {
+    "action_id": "481b204a-0b6d-433b-ae35-6da751798549",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T17:08:17.652782Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "c1526280-351c-402a-b490-ea10cc509b3e",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Test controlled recovery.",
+      "source": "test"
+    },
+    "status": "pending_approval",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T17:08:17.671504Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "e250a3a3-17c5-426a-b866-1fb46d1bc0c8",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_recoverable_failure",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Controlled recovery test.",
+      "source": "test"
+    },
+    "status": "succeeded",
+    "created_by": "test-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T17:08:17.835613Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "08071043-cd77-4d99-9433-04e8778789cc",
+      "action_id": "e250a3a3-17c5-426a-b866-1fb46d1bc0c8",
+      "decision": "approved",
+      "approved_by": "test-approver",
+      "approver_role": "L1",
+      "comment": "Approved for controlled recovery test.",
+      "created_at": "2026-09-12T17:08:17.850396Z"
+    }
+  },
+  {
+    "action_id": "1722ec6a-3667-4273-bc6f-aaaace744710",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_kubernetes_config_failure",
+      "task_id": null,
+      "parameters": {},
+      "reason": "Controlled remediation recommended for the Kubernetes incident.",
+      "source": "human_review"
+    },
+    "status": "pending_approval",
+    "created_by": "l1-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-12T17:56:42.967918Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
+  },
+  {
+    "action_id": "70a8651a-fa18-41c3-a33d-09ad0992eb37",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_kubernetes_config_failure",
+      "task_id": null,
+      "parameters": {},
+      "reason": "Controlled remediation recommended for the Kubernetes incident.",
+      "source": "human_review"
+    },
+    "status": "pending_approval",
+    "created_by": "l1-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-13T04:10:26.230314Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null
   }
 ]

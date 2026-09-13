@@ -916,3 +916,202 @@ footer {
     width: 100%;
   }
 }
+
+/* =========================================
+   Developer Copilot
+========================================= */
+
+.developer-copilot-section {
+  margin-top: 28px;
+}
+
+.developer-chat-card {
+  background: #ffffff;
+  border: 1px solid #d9e2ec;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+.developer-chat-header {
+  padding: 18px 22px;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(
+    135deg,
+    #f8fbff,
+    #eef6ff
+  );
+}
+
+.developer-chat-header strong {
+  font-size: 15px;
+  color: #1e293b;
+}
+
+.developer-chat-header p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.developer-chat-history {
+  padding: 20px;
+  min-height: 280px;
+  max-height: 650px;
+  overflow-y: auto;
+  background: #f8fafc;
+}
+
+.developer-message {
+  margin-bottom: 20px;
+}
+
+.message-label {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #64748b;
+}
+
+.message-bubble {
+  border-radius: 14px;
+  padding: 16px;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.user-bubble {
+  background: #2563eb;
+  color: white;
+  margin-left: auto;
+  max-width: 75%;
+}
+
+.assistant-bubble {
+  background: white;
+  border: 1px solid #dbeafe;
+  color: #1f2937;
+}
+
+.assistant-bubble h3 {
+  margin-top: 0;
+  color: #1d4ed8;
+}
+
+.copilot-block {
+  margin-top: 16px;
+}
+
+.copilot-block h4 {
+  margin-bottom: 6px;
+  color: #0f172a;
+}
+
+.copilot-block ul {
+  padding-left: 18px;
+}
+
+.copilot-block li {
+  margin-bottom: 5px;
+}
+
+.code-reason {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.human-review-note {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.loading-bubble {
+  color: #2563eb;
+  font-style: italic;
+}
+
+.developer-input-area {
+  display: flex;
+  gap: 12px;
+  padding: 18px;
+  border-top: 1px solid #e5e7eb;
+  background: white;
+}
+
+.developer-input-area textarea {
+  flex: 1;
+  resize: vertical;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+}
+
+.developer-input-area textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.developer-send-btn {
+  align-self: flex-end;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 11px 20px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.developer-send-btn:hover {
+  background: #1d4ed8;
+}
+
+.developer-send-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.developer-empty {
+  text-align: center;
+  padding: 45px 20px;
+  color: #64748b;
+}
+
+.developer-empty h3 {
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.developer-empty ul {
+  display: inline-block;
+  text-align: left;
+  margin-top: 10px;
+}
+
+.developer-error {
+  margin: 0 18px 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.developer-status {
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 12px;
+  font-weight: 700;
+}

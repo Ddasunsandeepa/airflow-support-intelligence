@@ -27,6 +27,12 @@ from backend.app.action_models import ActionRequest, ActionEditRequest
 from backend.app.action_models import ActionType
 from backend.app.action_registry import get_action_policy
 
+from backend.app.developer_models import (
+    DeveloperChatRequest,
+    DeveloperChatResponse,
+)
+from backend.app.developer_copilot import analyze_developer_request
+
 app = FastAPI(
     title="Airflow Support Intelligence",
     description="AI-assisted L1 Airflow incident investigation and support guidance",
@@ -709,6 +715,46 @@ def analyze_airflow(dag_id: str | None = None):
         "remediation_recommendation": remediation_recommendation,
     }
 
+# --------------------------------------------------
+# Developer Copilot
+# --------------------------------------------------
+
+@app.post(
+    "/developer/chat",
+    response_model=DeveloperChatResponse,
+)
+def developer_chat(request: DeveloperChatRequest):
+    """
+    Analyze a developer's Airflow question using live incident
+    evidence.
+
+    The Developer Copilot is advisory only. It does not modify
+    DAG source files or execute operational actions.
+    """
+
+    if not request.dag_id:
+        raise HTTPException(
+            status_code=400,
+            detail="dag_id is required for Developer Copilot analysis.",
+        )
+
+    try:
+        return analyze_developer_request(
+            message=request.message,
+            dag_id=request.dag_id,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Developer Copilot analysis failed: {exc}",
+        ) from exc
 
 @app.post("/analyze-import-error")
 def analyze_import_error(import_error_id: str):

@@ -44,6 +44,11 @@ function App() {
   const [remediationParameters, setRemediationParameters] = useState({});
   const [remediationReason, setRemediationReason] = useState("");
 
+  const [developerMessage, setDeveloperMessage] = useState("");
+  const [developerChat, setDeveloperChat] = useState([]);
+  const [developerLoading, setDeveloperLoading] = useState(false);
+  const [developerError, setDeveloperError] = useState("");
+
   useEffect(() => {
     const loadAirflowCatalog = async () => {
       setCatalogLoading(true);
@@ -219,10 +224,20 @@ function App() {
     await analyzeIncidentSelection(selectedIncident);
   };
 
-  const createRemediationAction = async () => {
+const createRemediationAction = async () => {
   if (!selectedIncident || selectedIncident.type !== "dag") {
     setRemediationError(
       "Controlled remediation is currently available for registered DAG incidents only."
+    );
+    return;
+  }
+
+  const recommendation = airflowResult?.remediation_recommendation;
+
+  if (!recommendation?.available) {
+    setRemediationError(
+      recommendation?.reason ||
+        "No controlled remediation action is recommended for this incident."
     );
     return;
   }
@@ -239,9 +254,9 @@ function App() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        action_type: "trigger_dag",
+        action_type: recommendation.action_type,
         dag_id: selectedIncident.id,
-        reason: "Controlled remediation recommended by Airflow Support Intelligence",
+        reason: recommendation.reason,
         source: "human_review",
       }),
     });
@@ -283,6 +298,70 @@ const startRemediationEdit = () => {
 
   setRemediationEditMode(true);
   setRemediationError("");
+};
+
+const askDeveloperCopilot = async () => {
+  if (!developerMessage.trim()) return;
+
+  if (selectedIncident.type !== "dag") {
+    setDeveloperError(
+      "Developer Copilot currently works with registered DAGs only."
+    );
+    return;
+  }
+
+  const userMessage = developerMessage.trim();
+
+  setDeveloperChat((previous) => [
+    ...previous,
+    {
+      role: "user",
+      message: userMessage,
+    },
+  ]);
+
+  setDeveloperMessage("");
+  setDeveloperLoading(true);
+  setDeveloperError("");
+
+  try {
+    const response = await fetch("/api/developer/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: userMessage,
+        dag_id: selectedIncident.id,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+
+      throw new Error(
+        errorData?.detail ||
+        `Developer Copilot failed with status ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+
+    setDeveloperChat((previous) => [
+      ...previous,
+      {
+        role: "assistant",
+        data,
+      },
+    ]);
+  } catch (err) {
+    setDeveloperError(
+      err.message ||
+      "Unable to connect to Developer Copilot."
+    );
+  } finally {
+    setDeveloperLoading(false);
+  }
 };
 
 const saveRemediationEdit = async () => {
@@ -1240,6 +1319,216 @@ const reanalyzeAfterRemediationFailure = async () => {
               </details>
             </section>
 
+            {/* ============================================ */}
+            {/* Developer Copilot */}
+            {/* ============================================ */}
+
+            <section className="developer-copilot-section">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">AI DEVELOPER ASSISTANT</p>
+                  <h2>Developer Copilot</h2>
+                  <p>
+                    Ask questions about the selected DAG and receive evidence-based
+                    diagnosis, reasoning, recommended investigation, and validation steps.
+                  </p>
+                </div>
+
+                <span className="developer-status">
+                  {selectedIncident.type === "dag"
+                    ? "Ready"
+                    : "DAG Required"}
+                </span>
+              </div>
+
+              <div className="developer-chat-card">
+
+                <div className="developer-chat-header">
+                  <div>
+                    <strong>
+                      {selectedIncident.type === "dag"
+                        ? selectedIncident.id
+                        : "No registered DAG selected"}
+                    </strong>
+
+                    <p>
+                      Evidence-grounded AI assistance
+                    </p>
+                  </div>
+                </div>
+
+                <div className="developer-chat-history">
+
+                  {developerChat.length === 0 && (
+                    <div className="developer-empty">
+                      <h3>Ask anything about this DAG</h3>
+
+                      <p>
+                        Example questions:
+                      </p>
+
+                      <ul>
+                        <li>Why is this DAG failing?</li>
+                        <li>What should I investigate first?</li>
+                        <li>Is this likely a Kubernetes or Airflow issue?</li>
+                        <li>What tests should I run before changing code?</li>
+                      </ul>
+                    </div>
+                  )}
+
+                  {developerChat.map((chat, index) => (
+                    <div
+                      key={index}
+                      className={`developer-message ${chat.role}`}
+                    >
+
+                      {chat.role === "user" ? (
+                        <>
+                          <div className="message-label">You</div>
+
+                          <div className="message-bubble user-bubble">
+                            {chat.message}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="message-label">
+                            Developer Copilot
+                          </div>
+
+                          <div className="message-bubble assistant-bubble">
+
+                            <h3>
+                              {chat.data?.diagnosis?.incident_class}
+                            </h3>
+
+                            <p>
+                              {chat.data?.diagnosis?.summary}
+                            </p>
+
+                            {chat.data?.reasoning && (
+                              <div className="copilot-block">
+                                <h4>Reasoning</h4>
+                                <p>{chat.data.reasoning}</p>
+                              </div>
+                            )}
+
+                            {chat.data?.evidence?.length > 0 && (
+                              <div className="copilot-block">
+                                <h4>Observed Evidence</h4>
+
+                                <ul>
+                                  {chat.data.evidence.map(
+                                    (item, i) => (
+                                      <li key={i}>{item}</li>
+                                    )
+                                  )}
+                                </ul>
+                              </div>
+                            )}
+
+                            {chat.data?.recommended_fix && (
+                              <div className="copilot-block">
+                                <h4>Recommended Investigation</h4>
+
+                                <p>
+                                  {chat.data.recommended_fix}
+                                </p>
+                              </div>
+                            )}
+
+                            {chat.data?.code_change && (
+                              <div className="copilot-block">
+                                <h4>Code Change Proposal</h4>
+
+                                <p>
+                                  {chat.data.code_change.summary}
+                                </p>
+
+                                <p className="code-reason">
+                                  {chat.data.code_change.reason}
+                                </p>
+                              </div>
+                            )}
+
+                            {chat.data?.tests_to_run?.length > 0 && (
+                              <div className="copilot-block">
+                                <h4>Tests to Run</h4>
+
+                                <ul>
+                                  {chat.data.tests_to_run.map(
+                                    (test, i) => (
+                                      <li key={i}>{test}</li>
+                                    )
+                                  )}
+                                </ul>
+                              </div>
+                            )}
+
+                            {chat.data?.human_review_required && (
+                              <div className="human-review-note">
+                                Human review required before applying production changes.
+                              </div>
+                            )}
+
+                          </div>
+                        </>
+                      )}
+
+                    </div>
+                  ))}
+
+                  {developerLoading && (
+                    <div className="developer-message assistant">
+
+                      <div className="message-label">
+                        Developer Copilot
+                      </div>
+
+                      <div className="message-bubble assistant-bubble loading-bubble">
+                        Analyzing live Airflow evidence...
+                      </div>
+
+                    </div>
+                  )}
+
+                </div>
+
+                {developerError && (
+                  <div className="developer-error">
+                    {developerError}
+                  </div>
+                )}
+
+                <div className="developer-input-area">
+
+                  <textarea
+                    value={developerMessage}
+                    onChange={(e) => setDeveloperMessage(e.target.value)}
+                    placeholder="Ask about this DAG failure..."
+                    rows="3"
+                    disabled={developerLoading}
+                  />
+
+                  <button
+                    onClick={askDeveloperCopilot}
+                    disabled={
+                      developerLoading ||
+                      !developerMessage.trim() ||
+                      selectedIncident.type !== "dag"
+                    }
+                    className="developer-send-btn"
+                  >
+                    {developerLoading
+                      ? "Analyzing..."
+                      : "Send"}
+                  </button>
+
+                </div>
+
+              </div>
+            </section>
+
             {/* Controlled Remediation */}
             <section className="card remediation-card">
               <div className="section-heading">
@@ -1259,37 +1548,56 @@ const reanalyzeAfterRemediationFailure = async () => {
 
               {!remediationAction && (
                 <div className="remediation-start">
-                  <div className="remediation-summary">
-                    <div>
-                      <span>Action</span>
-                      <strong>Trigger DAG</strong>
-                    </div>
+                  {airflowResult?.remediation_recommendation?.available ? (
+                    <>
+                      <div className="remediation-summary">
+                        <div>
+                          <span>Action</span>
+                          <strong>
+                            {airflowResult.remediation_recommendation.label}
+                          </strong>
+                        </div>
 
-                    <div>
-                      <span>Target DAG</span>
-                      <strong>{selectedIncident.id}</strong>
-                    </div>
+                        <div>
+                          <span>Target DAG</span>
+                          <strong>{selectedIncident.id}</strong>
+                        </div>
 
-                    <div>
-                      <span>Risk</span>
-                      <strong>LOW</strong>
-                    </div>
+                        <div>
+                          <span>Risk</span>
+                          <strong>
+                            {airflowResult.remediation_recommendation.risk_level}
+                          </strong>
+                        </div>
 
-                    <div>
-                      <span>Required Role</span>
-                      <strong>L1</strong>
-                    </div>
-                  </div>
+                        <div>
+                          <span>Required Role</span>
+                          <strong>
+                            {airflowResult.remediation_recommendation.required_role}
+                          </strong>
+                        </div>
+                      </div>
 
-                  <button
-                    className="airflow-button"
-                    onClick={createRemediationAction}
-                    disabled={remediationLoading}
-                  >
-                    {remediationLoading
-                      ? "Preparing Action..."
-                      : "Create Remediation Action"}
-                  </button>
+                      <p>
+                        {airflowResult.remediation_recommendation.reason}
+                      </p>
+
+                      <button
+                        className="airflow-button"
+                        onClick={createRemediationAction}
+                        disabled={remediationLoading}
+                      >
+                        {remediationLoading
+                          ? "Preparing Action..."
+                          : "Create Remediation Action"}
+                      </button>
+                    </>
+                  ) : (
+                    <div className="error-message">
+                      {airflowResult?.remediation_recommendation?.reason ||
+                        "No controlled remediation action is recommended for this incident."}
+                    </div>
+                  )}
                 </div>
               )}
 
