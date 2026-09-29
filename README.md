@@ -1,5 +1,8 @@
 # Adaptive Airflow Support Intelligence Platform
 
+For Gemini, Ollama, OpenAI, and evidence fallback configuration, see
+[LLM provider setup](docs/llm-setup.md).
+
 ### AI-Assisted L1 Incident Investigation, Explainability & Escalation Support
 
 An Airflow-specific operational intelligence platform designed to assist L1 engineers in investigating Airflow incidents by automatically detecting failures, collecting operational evidence, classifying incident types, explaining ML predictions, mapping incidents to runbooks, and providing investigation and escalation guidance.

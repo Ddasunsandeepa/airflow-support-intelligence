@@ -1,7 +1,23 @@
 import json
 import os
 
-from openai import OpenAI
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from backend.app.developer_llm import request_structured_llm
+
+
+class IncidentLLMResult(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    incident_class: Literal["Scheduler", "DAG Parsing", "Resource", "Kubernetes", "Configuration", "Unknown"]
+    confidence: float = Field(ge=0, le=1, allow_inf_nan=False)
+    reasoning: str
+    supporting_evidence: list[str]
+    l1_checks: list[str]
+    escalation_needed: bool
+    escalation_reason: str
 
 
 INCIDENT_CLASSES = [
@@ -95,61 +111,20 @@ def analyze_with_llm(
     Returns a structured analysis result.
     """
 
-    api_key = os.getenv("OPENAI_API_KEY")
-
-    if not api_key:
-        return {
-            "status": "not_configured",
-            "incident_class": "Unknown",
-            "confidence": None,
-            "reasoning": (
-                "LLM analysis is not configured because "
-                "OPENAI_API_KEY is not available."
-            ),
-            "supporting_evidence": [],
-            "l1_checks": [],
-            "escalation_needed": False,
-            "escalation_reason": "",
-        }
-
-    client = OpenAI(api_key=api_key)
-
-    model = os.getenv(
-        "OPENAI_MODEL",
-        "gpt-5.6-luna",
+    result = request_structured_llm(
+        build_llm_prompt(evidence=evidence, ml_result=ml_result),
+        IncidentLLMResult,
+        openai_model=os.getenv("OPENAI_MODEL", "gpt-5.6-luna"),
     )
-
-    prompt = build_llm_prompt(
-        evidence=evidence,
-        ml_result=ml_result,
-    )
-
-    response = client.responses.create(
-        model=model,
-        input=prompt,
-    )
-
-    raw_output = response.output_text
-
-    try:
-        result = json.loads(raw_output)
-    except json.JSONDecodeError:
-        return {
-            "status": "invalid_response",
-            "incident_class": "Unknown",
-            "confidence": None,
-            "reasoning": (
-                "The LLM returned a response that could not "
-                "be parsed as structured JSON."
-            ),
-            "supporting_evidence": [],
-            "l1_checks": [],
-            "escalation_needed": True,
-            "escalation_reason": (
-                "LLM response format could not be validated."
-            ),
-        }
-
-    result["status"] = "success"
-
-    return result
+    if result["status"] == "success":
+        return result
+    return {
+        "status": result["status"],
+        "incident_class": "Unknown",
+        "confidence": None,
+        "reasoning": "LLM analysis unavailable; using structured evidence and ML analysis.",
+        "supporting_evidence": [],
+        "l1_checks": [],
+        "escalation_needed": True,
+        "escalation_reason": "LLM analysis unavailable; review the collected evidence.",
+    }

@@ -2,6 +2,7 @@ from backend.app.llm_analyzer import analyze_with_llm
 from backend.app.kubernetes_analyzer import analyze_kubernetes_evidence
 
 from dataclasses import asdict, is_dataclass
+from backend.app.evidence_signals import extract_evidence_signals
 
 
 def _to_llm_evidence(evidence) -> dict:
@@ -42,6 +43,20 @@ def analyze_hybrid(
     """
 
     ml_result = ml_result or {}
+
+    evidence_signal_result = extract_evidence_signals(
+        evidence=evidence,
+        kubernetes_evidence=kubernetes_evidence,
+    )
+
+    def with_evidence_signals(result: dict) -> dict:
+        result["evidence_signals"] = {
+            "incident_class": evidence_signal_result.incident_class,
+            "confidence": evidence_signal_result.confidence,
+            "matched_signals": evidence_signal_result.matched_signals,
+            "supporting_evidence": evidence_signal_result.supporting_evidence,
+        }
+        return result
 
     llm_evidence = _to_llm_evidence(evidence)
 
@@ -296,8 +311,19 @@ def analyze_hybrid(
                 "agreement": False,
                 "human_review": True,
             }
+        if evidence_signal_result.incident_class != "Unknown":
+            return with_evidence_signals({
+                "final_class": evidence_signal_result.incident_class,
+                "final_confidence": evidence_signal_result.confidence,
+                "decision_mode": "EVIDENCE_SIGNAL_FALLBACK",
+                "ml": ml_result,
+                "llm": llm_result,
+                "kubernetes": kubernetes_result,
+                "agreement": False,
+                "human_review": True,
+            })
 
-        return {
+        return with_evidence_signals({
             "final_class": "Unknown",
             "final_confidence": None,
             "decision_mode": "INSUFFICIENT_EVIDENCE",
@@ -306,7 +332,7 @@ def analyze_hybrid(
             "kubernetes": kubernetes_result,
             "agreement": False,
             "human_review": True,
-        }
+        })
     
     if ml_available and llm_available:
 
@@ -376,8 +402,19 @@ def analyze_hybrid(
             "agreement": False,
             "human_review": True,
         }
-    
-    return {
+    if evidence_signal_result.incident_class != "Unknown":
+        return with_evidence_signals({
+            "final_class": evidence_signal_result.incident_class,
+            "final_confidence": evidence_signal_result.confidence,
+            "decision_mode": "EVIDENCE_SIGNAL_FALLBACK",
+            "ml": ml_result,
+            "llm": llm_result,
+            "kubernetes": kubernetes_result,
+            "agreement": False,
+            "human_review": True,
+        })
+
+    return with_evidence_signals({
         "final_class": "Unknown",
         "final_confidence": None,
         "decision_mode": "INSUFFICIENT_EVIDENCE",
@@ -386,4 +423,4 @@ def analyze_hybrid(
         "kubernetes": kubernetes_result,
         "agreement": False,
         "human_review": True,
-    }
+    })

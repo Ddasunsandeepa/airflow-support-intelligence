@@ -1,7 +1,112 @@
-import json
+import logging
 import os
+from typing import TypeVar
+from urllib.parse import quote
 
-from openai import OpenAI
+import requests
+from openai import OpenAI, OpenAIError
+from pydantic import BaseModel, ConfigDict
+
+
+logger = logging.getLogger(__name__)
+ResultModel = TypeVar("ResultModel", bound=BaseModel)
+
+
+class DeveloperLLMResult(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    summary: str
+    reasoning: str
+    recommended_fix: str
+    code_change_available: bool
+    code_change_summary: str
+    tests_to_run: list[str]
+
+
+def _request_provider(provider: str, prompt: str, schema: dict, openai_model: str) -> str:
+    """One bounded request; never execute model output or retry exhausted credits."""
+    if provider == "openai":
+        with OpenAI(api_key=os.environ["OPENAI_API_KEY"], timeout=30, max_retries=0) as client:
+            return client.responses.create(model=openai_model, input=prompt).output_text
+
+    if provider == "gemini":
+        model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+        response = requests.post(
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{quote(model, safe='')}:generateContent",
+            headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"]},
+            json={
+                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "responseMimeType": "application/json",
+                    "responseJsonSchema": schema,
+                },
+            },
+            timeout=(5, 30),
+        )
+        response.raise_for_status()
+        candidate = response.json()["candidates"][0]
+        if candidate.get("finishReason") != "STOP":
+            raise ValueError("Incomplete Gemini response")
+        return "".join(
+            part.get("text", "") for part in candidate["content"]["parts"]
+            if not part.get("thought")
+        )
+
+    response = requests.post(
+        os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/") + "/api/chat",
+        json={
+            "model": os.environ["OLLAMA_MODEL"],
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "format": schema,
+        },
+        timeout=(5, 60),
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not payload.get("done") or payload.get("done_reason") == "length":
+        raise ValueError("Incomplete Ollama response")
+    return payload["message"]["content"]
+
+
+def request_structured_llm(
+    prompt: str, result_model: type[ResultModel], *, openai_model: str
+) -> dict:
+    """Shared transport for the two existing analysis prompts and response contracts.
+
+    OpenAI remains the legacy default. Additional providers are tried only when
+    explicitly listed in LLM_FALLBACK_PROVIDERS. Failure lets callers retain
+    their existing deterministic evidence/ML analysis.
+    """
+    primary = os.getenv("LLM_PROVIDER", "openai").strip().lower()
+    if primary == "none":
+        return {"status": "not_configured"}
+    providers = list(dict.fromkeys([
+        primary,
+        *[item.strip().lower() for item in os.getenv("LLM_FALLBACK_PROVIDERS", "").split(",") if item.strip()],
+    ]))
+    status = "not_configured"
+    for provider in providers:
+        required = {"openai": "OPENAI_API_KEY", "gemini": "GEMINI_API_KEY", "ollama": "OLLAMA_MODEL"}
+        if provider not in required:
+            logger.warning("Unsupported LLM provider configuration; using evidence fallback.")
+            continue
+        if not os.getenv(required[provider], "").strip():
+            logger.warning("LLM provider %s is missing %s.", provider, required[provider])
+            continue
+        try:
+            output = _request_provider(provider, prompt, result_model.model_json_schema(), openai_model)
+            result = result_model.model_validate_json(output).model_dump()
+            return {**result, "status": "success"}
+        except (OpenAIError, requests.RequestException) as exc:
+            status = "provider_unavailable"
+            # Do not log provider response bodies, credentials, or incident evidence.
+            logger.warning("LLM provider %s unavailable (%s); trying fallback.", provider, type(exc).__name__)
+        except (ValueError, TypeError, KeyError, IndexError, AttributeError) as exc:
+            status = "invalid_llm_response"
+            logger.warning("LLM provider %s returned invalid output (%s); trying fallback.", provider, type(exc).__name__)
+    return {"status": status}
 
 
 def build_developer_prompt(
@@ -116,27 +221,7 @@ def analyze_with_developer_llm(
     or modifies Airflow source files.
     """
 
-    api_key = os.getenv("OPENAI_API_KEY")
-
-    if not api_key:
-        return {
-            "status": "not_configured",
-            "summary": (
-                "Developer Copilot LLM is not configured. "
-                "The evidence-based analysis remains available."
-            ),
-            "reasoning": "",
-            "recommended_fix": recommended_fix,
-            "code_change_available": False,
-            "code_change_summary": (
-                "LLM configuration is required before "
-                "developer-specific reasoning is available."
-            ),
-            "tests_to_run": [],
-        }
-
-    client = OpenAI(api_key=api_key)
-
+    
     prompt = build_developer_prompt(
         message=message,
         incident_type=incident_type,
@@ -147,49 +232,19 @@ def analyze_with_developer_llm(
         recommended_fix=recommended_fix,
     )
 
-    response = client.responses.create(
-        model=os.getenv(
-            "DEVELOPER_COPILOT_MODEL",
-            "gpt-5.6-luna",
-        ),
-        input=prompt,
+    result = request_structured_llm(
+        prompt,
+        DeveloperLLMResult,
+        openai_model=os.getenv("DEVELOPER_COPILOT_MODEL") or os.getenv("OPENAI_MODEL", "gpt-5.6-luna"),
     )
-
-    output_text = response.output_text.strip()
-
-    try:
-        result = json.loads(output_text)
-    except json.JSONDecodeError:
-        return {
-            "status": "invalid_llm_response",
-            "summary": output_text,
-            "reasoning": "",
-            "recommended_fix": recommended_fix,
-            "code_change_available": False,
-            "code_change_summary": (
-                "The model response could not be parsed "
-                "as structured Copilot output."
-            ),
-            "tests_to_run": [],
-        }
-
+    if result["status"] == "success":
+        return result
     return {
-        "status": "success",
-        "summary": result.get("summary", ""),
-        "reasoning": result.get("reasoning", ""),
-        "recommended_fix": result.get(
-            "recommended_fix",
-            recommended_fix,
-        ),
-        "code_change_available": bool(
-            result.get("code_change_available", False)
-        ),
-        "code_change_summary": result.get(
-            "code_change_summary",
-            "",
-        ),
-        "tests_to_run": result.get(
-            "tests_to_run",
-            [],
-        ),
+        "status": result["status"],
+        "summary": "Developer LLM unavailable; using evidence-based analysis.",
+        "reasoning": "",
+        "recommended_fix": recommended_fix,
+        "code_change_available": False,
+        "code_change_summary": "No LLM-generated source change is available.",
+        "tests_to_run": [],
     }

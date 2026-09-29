@@ -718,6 +718,100 @@ class AirflowAdapter:
 
         return parse_kubernetes_evidence(message)
 
+    def get_incident_timeline_data(
+        self,
+        dag_id: str,
+    ) -> dict:
+        """
+        Collect the Airflow source data required to build
+        an incident timeline.
+
+        This method only retrieves observed Airflow data.
+        It does not create or infer timeline events.
+        """
+
+        dag_runs_response = self.get_dag_runs(
+            dag_id=dag_id,
+            limit=1,
+        )
+
+        if isinstance(dag_runs_response, dict):
+            dag_runs = dag_runs_response.get("dag_runs", [])
+        elif isinstance(dag_runs_response, list):
+            dag_runs = dag_runs_response
+        else:
+            dag_runs = []
+
+        if not dag_runs:
+            return {
+                "dag_run": None,
+                "task_instances": [],
+                "task_logs": [],
+            }
+
+        dag_run = dag_runs[0]
+
+        run_id = dag_run.get("dag_run_id")
+
+        if not run_id:
+            return {
+                "dag_run": dag_run,
+                "task_instances": [],
+                "task_logs": [],
+            }
+
+        task_response = self.get_task_instances(
+            dag_id=dag_id,
+            dag_run_id=run_id,
+        )
+
+        if isinstance(task_response, dict):
+            task_instances = task_response.get(
+                "task_instances",
+                [],
+            )
+        elif isinstance(task_response, list):
+            task_instances = task_response
+        else:
+            task_instances = []
+
+        task_logs = []
+
+        for task in task_instances:
+            task_id = task.get("task_id")
+            try_number = task.get("try_number", 1)
+
+            if not task_id:
+                continue
+
+            try:
+                log_response = self.get_task_logs(
+                    dag_id=dag_id,
+                    dag_run_id=run_id,
+                    task_id=task_id,
+                    try_number=try_number,
+                )
+            except Exception:
+                continue
+
+            if not isinstance(log_response, dict):
+                continue
+
+            content = log_response.get("content", [])
+
+            if isinstance(content, list):
+                task_logs.extend(
+                    entry
+                    for entry in content
+                    if isinstance(entry, dict)
+                )
+
+        return {
+            "dag_run": dag_run,
+            "task_instances": task_instances,
+            "task_logs": task_logs,
+        }
+
 
 if __name__ == "__main__":
     adapter = AirflowAdapter()

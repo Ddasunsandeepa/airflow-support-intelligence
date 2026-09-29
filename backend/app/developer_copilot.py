@@ -9,6 +9,10 @@ from backend.app.hybrid_analyzer import analyze_hybrid
 
 from backend.app.developer_llm import analyze_with_developer_llm
 
+from backend.app.source_change_provider import (
+    get_controlled_source_change,
+)
+
 
 def _evidence_to_dict(evidence):
     """
@@ -385,6 +389,20 @@ def analyze_developer_request(
         incident_class,
         airflow_evidence,
     )
+    if incident_type == "dag" and dag_id:
+        controlled_change = get_controlled_source_change(dag_id)
+
+        if controlled_change is not None:
+            code_change = CodeChangeProposal(
+                available=True,
+                summary=controlled_change.summary,
+                reason=controlled_change.reason,
+                target=controlled_change.target,
+                file_path=controlled_change.file_path,
+                language=controlled_change.language,
+                before_code=controlled_change.before_code,
+                proposed_code=controlled_change.proposed_code,
+            )
 
     tests_to_run = _build_tests(
         incident_class
@@ -412,17 +430,16 @@ def analyze_developer_request(
             tests_to_run = developer_llm_result["tests_to_run"]
 
         if developer_llm_result["code_change_summary"]:
-            code_change = CodeChangeProposal(
-                available=developer_llm_result[
-                    "code_change_available"
-                ],
-                summary=developer_llm_result[
-                    "code_change_summary"
-                ],
-                reason=(
-                    developer_llm_result["code_change_summary"]
-                    or code_change.reason
-                ),
+            code_change = code_change.model_copy(
+                update={
+                    "summary": developer_llm_result[
+                        "code_change_summary"
+                    ],
+                    "reason": (
+                        developer_llm_result["code_change_summary"]
+                        or code_change.reason
+                    ),
+                }
             )
 
     else:
