@@ -49,6 +49,10 @@ function App() {
   const [developerLoading, setDeveloperLoading] = useState(false);
   const [developerError, setDeveloperError] = useState("");
 
+  const [sourceChangeProposal, setSourceChangeProposal] = useState(null);
+  const [sourceChangeLoading, setSourceChangeLoading] = useState(false);
+  const [sourceChangeError, setSourceChangeError] = useState("");
+
   useEffect(() => {
     const loadAirflowCatalog = async () => {
       setCatalogLoading(true);
@@ -256,6 +260,9 @@ const createRemediationAction = async () => {
       body: JSON.stringify({
         action_type: recommendation.action_type,
         dag_id: selectedIncident.id,
+        parameters: {
+          mode: "failure",
+        },
         reason: recommendation.reason,
         source: "human_review",
       }),
@@ -317,6 +324,9 @@ const askDeveloperCopilot = async () => {
   setDeveloperLoading(true);
   setDeveloperError("");
 
+  setSourceChangeProposal(null);
+  setSourceChangeError("");
+
   try {
     const requestBody =
       selectedIncident.type === "import_error"
@@ -364,6 +374,72 @@ const askDeveloperCopilot = async () => {
     );
   } finally {
     setDeveloperLoading(false);
+  }
+};
+
+const reviewDeveloperCodeChange = async (codeChange) => {
+  if (
+    !codeChange?.available ||
+    !codeChange?.before_code ||
+    !codeChange?.proposed_code ||
+    !codeChange?.file_path
+  ) {
+    setSourceChangeError(
+      "The Developer Copilot did not provide a complete source-code proposal."
+    );
+    return;
+  }
+
+  setSourceChangeLoading(true);
+  setSourceChangeError("");
+  setSourceChangeProposal(null);
+
+  try {
+    const response = await fetch("/api/change-proposals/source-code", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        target:
+          codeChange.target ||
+          selectedIncident?.id ||
+          "unknown-target",
+
+        file_path: codeChange.file_path,
+
+        before_code: codeChange.before_code,
+
+        proposed_code: codeChange.proposed_code,
+
+        description:
+          codeChange.reason ||
+          codeChange.summary ||
+          "Developer Copilot source-code proposal.",
+
+        language: codeChange.language || "python",
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+
+      throw new Error(
+        errorData?.detail ||
+          `Source change review failed with status ${response.status}`
+      );
+    }
+
+    const proposal = await response.json();
+
+    setSourceChangeProposal(proposal);
+  } catch (err) {
+    setSourceChangeError(
+      err.message ||
+        "Could not create the source-code change review."
+    );
+  } finally {
+    setSourceChangeLoading(false);
   }
 };
 
@@ -1114,6 +1190,69 @@ const reanalyzeAfterRemediationFailure = async () => {
               </div>
             </section>
 
+            {/* Incident Timeline */}
+            <section className="card incident-timeline-card">
+              <div className="section-heading">
+                <div>
+                  <p className="card-label">INCIDENT TIMELINE</p>
+
+                  <h2>What Happened & In What Order</h2>
+
+                  <p>
+                    Chronological events correlated from Airflow DAG runs, task instances,
+                    and task logs.
+                  </p>
+                </div>
+
+                <span className="tag">CORRELATED</span>
+              </div>
+
+              {(airflowResult.timeline || []).length > 0 ? (
+                <div className="incident-timeline">
+                  {airflowResult.timeline.map((event, index) => (
+                    <div className="timeline-item" key={`${event.event_type}-${index}`}>
+                      <div className="timeline-marker">
+                        <span></span>
+                      </div>
+
+                      <div className="timeline-content">
+                        <div className="timeline-header">
+                          <div>
+                            <strong>{event.title}</strong>
+
+                            <span className="timeline-source">
+                              {event.source}
+                            </span>
+                          </div>
+
+                          <time>
+                            {new Date(event.timestamp).toLocaleTimeString()}
+                          </time>
+                        </div>
+
+                        <p>{event.description}</p>
+
+                        {event.metadata &&
+                          Object.keys(event.metadata).length > 0 && (
+                            <details className="timeline-metadata">
+                              <summary>Event details</summary>
+
+                              <pre>
+                                {JSON.stringify(event.metadata, null, 2)}
+                              </pre>
+                            </details>
+                          )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <p>No timeline events are available for this incident.</p>
+                </div>
+              )}
+            </section>
+
             {/* Airflow Evidence */}
             <section className="card">
               <div className="section-heading">
@@ -1247,7 +1386,7 @@ const reanalyzeAfterRemediationFailure = async () => {
                     <h2>Supporting Evidence</h2>
 
                     <p>
-                      Evidence identified by the LLM during contextual analysis.
+                      Evidence correlated from the available incident sources.
                     </p>
                   </div>
 
@@ -1255,15 +1394,19 @@ const reanalyzeAfterRemediationFailure = async () => {
                 </div>
 
                 <ul className="checks">
-                  {(airflowResult.llm.supporting_evidence || []).map(
-                    (evidence, index) => (
+                  {[
+                    ...(airflowResult.evidence_signals?.supporting_evidence || []),
+                    ...(airflowResult.llm?.supporting_evidence || []),
+                  ]
+                    .filter(
+                      (item, index, items) =>
+                        item && items.indexOf(item) === index
+                    )
+                    .map((evidence, index) => (
                       <li key={index}>
-                        <span className="check-number">{index + 1}</span>
-
                         <span>{evidence}</span>
                       </li>
-                    )
-                  )}
+                    ))}
                 </ul>
               </div>
 
@@ -1457,6 +1600,30 @@ const reanalyzeAfterRemediationFailure = async () => {
                                       {chat.data.code_change.reason}
                                     </p>
                                   )}
+
+                                {chat.data.code_change.available &&
+                                  chat.data.code_change.before_code &&
+                                  chat.data.code_change.proposed_code && (
+                                    <div className="developer-change-actions">
+                                      <button
+                                        className="review-source-button"
+                                        onClick={() =>
+                                          reviewDeveloperCodeChange(
+                                            chat.data.code_change
+                                          )
+                                        }
+                                        disabled={sourceChangeLoading}
+                                      >
+                                        {sourceChangeLoading
+                                          ? "Preparing Change Review..."
+                                          : "Review Proposed Change"}
+                                      </button>
+
+                                      <span className="review-only-label">
+                                        Review only — no source files will be modified.
+                                      </span>
+                                    </div>
+                                  )}
                               </div>
                             )}
 
@@ -1536,6 +1703,154 @@ const reanalyzeAfterRemediationFailure = async () => {
 
               </div>
             </section>
+
+            {/* Source Code Change Review */}
+            {sourceChangeProposal && (
+              <section className="card source-change-review">
+                <div className="change-review-header">
+                  <div>
+                    <p className="card-label">SOURCE CODE CHANGE REVIEW</p>
+
+                    <h2>{sourceChangeProposal.title}</h2>
+
+                    <p>{sourceChangeProposal.description}</p>
+                  </div>
+
+                  <span className="change-review-badge">
+                    REVIEW ONLY
+                  </span>
+                </div>
+
+                <div className="change-review-meta">
+                  <div>
+                    <span>Target</span>
+                    <strong>{sourceChangeProposal.target}</strong>
+                  </div>
+
+                  <div>
+                    <span>Change Type</span>
+                    <strong>
+                      {sourceChangeProposal.change_type
+                        ?.replaceAll("_", " ")}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>File</span>
+                    <strong>
+                      {sourceChangeProposal.source_code?.file_path}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="change-state-grid">
+                  <div className="change-state-panel">
+                    <div className="change-state-title">
+                      <span>CURRENT CODE</span>
+                    </div>
+
+                    <div className="source-file-path">
+                      {sourceChangeProposal.source_code?.file_path}
+                    </div>
+
+                    <pre>
+                      {sourceChangeProposal.source_code?.before_code}
+                    </pre>
+                  </div>
+
+                  <div className="change-state-panel proposed">
+                    <div className="change-state-title">
+                      <span>PROPOSED CODE</span>
+                    </div>
+
+                    <div className="source-file-path">
+                      {sourceChangeProposal.source_code?.file_path}
+                    </div>
+
+                    <pre>
+                      {sourceChangeProposal.source_code?.proposed_code}
+                    </pre>
+                  </div>
+                </div>
+
+                <div className="change-diff">
+                  <div className="change-diff-header">
+                    <div>
+                      <strong>Exact Change</strong>
+                      <span>Unified diff generated by the backend</span>
+                    </div>
+
+                    <div className="diff-stats">
+                      <span className="deletion-stat">
+                        -{sourceChangeProposal.deletions}
+                      </span>
+
+                      <span className="addition-stat">
+                        +{sourceChangeProposal.additions}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="diff-code">
+                    {(sourceChangeProposal.unified_diff || "")
+                      .split("\n")
+                      .map((line, index) => {
+                        const isFileHeader =
+                          line.startsWith("---") ||
+                          line.startsWith("+++");
+
+                        const isAddition =
+                          line.startsWith("+") &&
+                          !line.startsWith("+++");
+
+                        const isDeletion =
+                          line.startsWith("-") &&
+                          !line.startsWith("---");
+
+                        const isHunk = line.startsWith("@@");
+
+                        let lineClass = "diff-line-context";
+
+                        if (isAddition) {
+                          lineClass = "diff-line-added";
+                        } else if (isDeletion) {
+                          lineClass = "diff-line-removed";
+                        } else if (isHunk) {
+                          lineClass = "diff-line-hunk";
+                        } else if (isFileHeader) {
+                          lineClass = "diff-line-header";
+                        }
+
+                        return (
+                          <div
+                            key={`${index}-${line}`}
+                            className={`diff-line ${lineClass}`}
+                          >
+                            {line || " "}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                <div className="change-review-note">
+                  <strong>Review-only proposal</strong>
+
+                  <p>
+                    This source-code proposal has not modified,
+                    written, deployed, or executed any source file.
+                    An engineer must review the proposed change before
+                    any implementation decision is made.
+                  </p>
+                </div>
+              </section>
+            )}
+
+            {sourceChangeError && (
+              <div className="error-message">
+                {sourceChangeError}
+              </div>
+            )}
 
             {/* Controlled Remediation */}
             <section className="card remediation-card">
@@ -1638,6 +1953,175 @@ const reanalyzeAfterRemediationFailure = async () => {
                       </strong>
                     </div>
                   </div>
+
+                  {remediationAction.change_proposal && (
+                    <div className="change-review">
+                      <div className="change-review-header">
+                        <div>
+                          <p className="card-label">REMEDIATION CHANGE REVIEW</p>
+                          <h3>Review Proposed Change</h3>
+                          <p>
+                            Review exactly what will change before approving execution.
+                          </p>
+                        </div>
+
+                        <span className="change-review-badge">
+                          {remediationAction.status === "pending_approval"
+                            ? "PENDING REVIEW"
+                            : remediationAction.status
+                                ?.replaceAll("_", " ")
+                                .toUpperCase()}
+                        </span>
+                      </div>
+
+                      <div className="change-review-meta">
+                        <div>
+                          <span>Target</span>
+                          <strong>{remediationAction.change_proposal.target}</strong>
+                        </div>
+
+                        <div>
+                          <span>Change Type</span>
+                          <strong>
+                            {remediationAction.change_proposal.change_type
+                              ?.replaceAll("_", " ")}
+                          </strong>
+                        </div>
+                      </div>
+
+                      {remediationAction.change_proposal.change_type === "source_code" ? (
+                      <div className="change-state-grid">
+                        <div className="change-state-panel">
+                          <div className="change-state-title">
+                            <span>CURRENT CODE</span>
+                          </div>
+
+                          <div className="source-file-path">
+                            {remediationAction.change_proposal.source_code?.file_path}
+                          </div>
+
+                          <pre>
+                            {remediationAction.change_proposal.source_code?.before_code}
+                          </pre>
+                        </div>
+
+                        <div className="change-state-panel proposed">
+                          <div className="change-state-title">
+                            <span>PROPOSED CODE</span>
+                          </div>
+
+                          <div className="source-file-path">
+                            {remediationAction.change_proposal.source_code?.file_path}
+                          </div>
+
+                          <pre>
+                            {remediationAction.change_proposal.source_code?.proposed_code}
+                          </pre>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="change-state-grid">
+                        <div className="change-state-panel">
+                          <div className="change-state-title">
+                            <span>BEFORE</span>
+                          </div>
+
+                          <pre>
+                            {JSON.stringify(
+                              remediationAction.change_proposal.before,
+                              null,
+                              2
+                            )}
+                          </pre>
+                        </div>
+
+                        <div className="change-state-panel proposed">
+                          <div className="change-state-title">
+                            <span>PROPOSED</span>
+                          </div>
+
+                          <pre>
+                            {JSON.stringify(
+                              remediationAction.change_proposal.after,
+                              null,
+                              2
+                            )}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+
+                      <div className="change-diff">
+                        <div className="change-diff-header">
+                          <div>
+                            <strong>Exact Change</strong>
+                            <span>Unified diff generated by the backend</span>
+                          </div>
+
+                          <div className="diff-stats">
+                            <span className="deletion-stat">
+                              -{remediationAction.change_proposal.deletions}
+                            </span>
+
+                            <span className="addition-stat">
+                              +{remediationAction.change_proposal.additions}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="diff-code">
+                          {remediationAction.change_proposal.unified_diff
+                            .split("\n")
+                            .map((line, index) => {
+                              const isFileHeader =
+                                line.startsWith("---") || line.startsWith("+++");
+
+                              const isAddition =
+                                line.startsWith("+") && !line.startsWith("+++");
+
+                              const isDeletion =
+                                line.startsWith("-") && !line.startsWith("---");
+
+                              const isHunk = line.startsWith("@@");
+
+                              let lineClass = "diff-line-context";
+
+                              if (isAddition) {
+                                lineClass = "diff-line-added";
+                              } else if (isDeletion) {
+                                lineClass = "diff-line-removed";
+                              } else if (isHunk) {
+                                lineClass = "diff-line-hunk";
+                              } else if (isFileHeader) {
+                                lineClass = "diff-line-header";
+                              }
+
+                              return (
+                                <div
+                                  key={`${index}-${line}`}
+                                  className={`diff-line ${lineClass}`}
+                                >
+                                  {line || " "}
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+
+                      <div className="change-purpose">
+                        <span>CHANGE PURPOSE</span>
+                        <p>{remediationAction.change_proposal.description}</p>
+                      </div>
+
+                      <div className="change-review-note">
+                        <strong>Human review required</strong>
+                        <p>
+                          This proposal has not been executed. Review the exact change
+                          before approving the remediation action.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {remediationAction.status === "pending_approval" && 
                   remediationAction.validation?.warnings?.length > 0 && (

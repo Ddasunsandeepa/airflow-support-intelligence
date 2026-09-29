@@ -33,17 +33,24 @@ class DiagnosisResult(BaseModel):
 
 class CodeChangeProposal(BaseModel):
     """
-    Proposed code change.
+    Proposed source-code change.
 
     The Copilot may suggest a change, but this proposal is
     never written directly into an Airflow deployment.
+    It must be reviewed by a human first.
     """
 
     available: bool = False
+
     summary: Optional[str] = None
-    proposed_code: Optional[str] = None
     reason: Optional[str] = None
 
+    target: Optional[str] = None
+    file_path: Optional[str] = None
+    language: str = "python"
+
+    before_code: Optional[str] = None
+    proposed_code: Optional[str] = None
 
 class DeveloperChatResponse(BaseModel):
     """

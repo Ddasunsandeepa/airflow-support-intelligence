@@ -33,6 +33,19 @@ from backend.app.developer_models import (
 )
 from backend.app.developer_copilot import analyze_developer_request
 
+from backend.app.incident_timeline import build_incident_timeline
+from backend.app.change_review import build_source_code_change_proposal
+from pydantic import BaseModel, Field
+
+
+class SourceCodeChangeProposalRequest(BaseModel):
+    target: str = Field(min_length=1)
+    file_path: str = Field(min_length=1)
+    before_code: str = Field(min_length=1)
+    proposed_code: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    language: str = "python"
+
 app = FastAPI(
     title="Airflow Support Intelligence",
     description="AI-assisted L1 Airflow incident investigation and support guidance",
@@ -625,6 +638,19 @@ def analyze_airflow(dag_id: str | None = None):
         dag_id=dag_id
     )
 
+    timeline_data = adapter.get_incident_timeline_data(
+        dag_id=dag_id
+    )
+
+    timeline = []
+
+    if timeline_data["dag_run"] is not None:
+        timeline = build_incident_timeline(
+            dag_run=timeline_data["dag_run"],
+            task_instances=timeline_data["task_instances"],
+            task_logs=timeline_data["task_logs"],
+        )
+
     airflow_evidence = incident_evidence.airflow
     kubernetes_evidence = incident_evidence.kubernetes
 
@@ -701,6 +727,11 @@ def analyze_airflow(dag_id: str | None = None):
 
         "kubernetes": kubernetes_evidence_dict,
 
+        "evidence_signals": hybrid_result.get(
+            "evidence_signals",
+            {},
+        ),
+
         "evidence": airflow_evidence_dict,
 
         "guidance": {
@@ -713,7 +744,22 @@ def analyze_airflow(dag_id: str | None = None):
         "escalation": guidance["escalation"],
 
         "remediation_recommendation": remediation_recommendation,
+
+        "timeline": timeline,
     }
+
+@app.post("/change-proposals/source-code")
+def create_source_code_change_proposal(
+    request: SourceCodeChangeProposalRequest,
+):
+    return build_source_code_change_proposal(
+        target=request.target,
+        file_path=request.file_path,
+        before_code=request.before_code,
+        proposed_code=request.proposed_code,
+        description=request.description,
+        language=request.language,
+    )
 
 # --------------------------------------------------
 # Developer Copilot

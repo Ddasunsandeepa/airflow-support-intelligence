@@ -10,6 +10,10 @@ from backend.app.action_validator import validate_action
 from backend.app.actions.airflow import AirflowActionExecutor
 from backend.app.verification import VerificationEngine
 
+from backend.app.change_review import (
+    build_runtime_change_proposal,
+)
+
 
 class ActionService:
     def __init__(
@@ -59,10 +63,33 @@ class ActionService:
         if not isinstance(parameters, dict):
             raise ValueError("Action parameters must be a dictionary.")
 
+        previous_parameters = dict(
+            remediation.request.parameters
+        )
+
         remediation.request.parameters = parameters
 
         if reason is not None and reason.strip():
             remediation.request.reason = reason.strip()
+
+        previous_configuration = {}
+
+        previous_conf = previous_parameters.get("conf")
+
+        if isinstance(previous_conf, dict):
+            previous_configuration = dict(previous_conf)
+
+        elif "mode" in previous_parameters:
+            previous_configuration = {
+                "mode": previous_parameters["mode"]
+            }
+
+        remediation.change_proposal = (
+            build_runtime_change_proposal(
+                action=remediation.request,
+                previous_configuration=previous_configuration,
+            )
+)
 
         # Editing invalidates the previous validation/approval.
         remediation.validation = None

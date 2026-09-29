@@ -1115,3 +1115,509 @@ footer {
   font-size: 12px;
   font-weight: 700;
 }
+
+/* =========================================
+   Incident Timeline
+   ========================================= */
+
+.incident-timeline-card {
+  margin-top: 20px;
+}
+
+.incident-timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px 0 8px 4px;
+}
+
+/* Vertical timeline line */
+.incident-timeline::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 18px;
+  bottom: 18px;
+  width: 2px;
+  background: #e1e6eb;
+}
+
+.timeline-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 16px;
+  padding-bottom: 24px;
+}
+
+.timeline-item:last-child {
+  padding-bottom: 0;
+}
+
+/* Timeline marker */
+.timeline-marker {
+  position: relative;
+  z-index: 2;
+  width: 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.timeline-marker span {
+  width: 16px;
+  height: 16px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 3px solid #667085;
+}
+
+/* Error events
+.timeline-item:has(.timeline-source) .timeline-marker span {
+  background: #ffffff;
+} */
+
+/* Timeline content */
+.timeline-content {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid #e1e6eb;
+  border-radius: 10px;
+  background: #fafbfc;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.timeline-content:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 3px 10px rgba(16, 24, 40, 0.04);
+}
+
+.timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.timeline-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.timeline-header strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.timeline-header time {
+  flex: 0 0 auto;
+  color: #667085;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: nowrap;
+}
+
+.timeline-source {
+  color: #98a2b3;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.timeline-content > p {
+  margin: 9px 0 0;
+  color: #475467;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Event details */
+.timeline-metadata {
+  margin-top: 12px;
+  border-top: 1px solid #e1e6eb;
+  padding-top: 10px;
+}
+
+.timeline-metadata summary {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.timeline-metadata summary:hover {
+  color: #172033;
+}
+
+.timeline-metadata pre {
+  margin: 10px 0 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f1f3f5;
+  color: #344054;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Timeline tag */
+.incident-timeline-card .tag {
+  white-space: nowrap;
+}
+
+/* Responsive timeline */
+@media (max-width: 600px) {
+  .incident-timeline {
+    padding-left: 0;
+  }
+
+  .timeline-item {
+    grid-template-columns: 20px 1fr;
+    gap: 12px;
+  }
+
+  .incident-timeline::before {
+    left: 9px;
+  }
+
+  .timeline-marker {
+    width: 20px;
+  }
+
+  .timeline-marker span {
+    width: 14px;
+    height: 14px;
+  }
+
+  .timeline-header {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .timeline-header time {
+    white-space: normal;
+  }
+}
+
+/* =========================================
+   Remediation Change Review
+========================================= */
+
+.change-review {
+  margin-top: 4px;
+  border: 1px solid #dfe4ea;
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.change-review-header {
+  padding: 22px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fafbfc;
+}
+
+.change-review-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #172033;
+}
+
+.change-review-header p:not(.card-label) {
+  margin: 6px 0 0;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.change-review-badge {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid #f0c36d;
+  border-radius: 999px;
+  background: #fffaf0;
+  color: #9a6700;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.change-review-meta {
+  padding: 18px 22px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.change-review-meta > div {
+  padding: 14px;
+  border: 1px solid #e1e6eb;
+  border-radius: 10px;
+  background: #fafbfc;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.change-review-meta span,
+.change-purpose > span {
+  color: #667085;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.change-review-meta strong {
+  color: #172033;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  text-transform: capitalize;
+}
+
+/* Before / proposed */
+
+.change-state-grid {
+  padding: 22px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  background: #ffffff;
+}
+
+.change-state-panel {
+  overflow: hidden;
+  border: 1px solid #e1e6eb;
+  border-radius: 10px;
+  background: #fafbfc;
+}
+
+.change-state-panel.proposed {
+  border-color: #b7dfc8;
+}
+
+.change-state-title {
+  padding: 10px 14px;
+  border-bottom: 1px solid #e1e6eb;
+  background: #f4f6f8;
+}
+
+.change-state-panel.proposed .change-state-title {
+  background: #f6fbf8;
+  border-bottom-color: #b7dfc8;
+}
+
+.change-state-title span {
+  color: #667085;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.change-state-panel.proposed .change-state-title span {
+  color: #18794e;
+}
+
+.change-state-panel pre {
+  margin: 0;
+  padding: 16px;
+  overflow-x: auto;
+  color: #344054;
+  font-size: 13px;
+  line-height: 1.7;
+  font-family:
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+}
+
+/* Diff */
+
+.change-diff {
+  margin: 0 22px 22px;
+  overflow: hidden;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+}
+
+.change-diff-header {
+  padding: 12px 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid #d0d5dd;
+  background: #f8fafc;
+}
+
+.change-diff-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.change-diff-header strong {
+  font-size: 13px;
+  color: #172033;
+}
+
+.change-diff-header > div:first-child span {
+  color: #667085;
+  font-size: 11px;
+}
+
+.diff-stats {
+  display: flex;
+  gap: 8px;
+}
+
+.diff-stats span {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  font-family:
+    "SFMono-Regular",
+    Consolas,
+    monospace;
+}
+
+.deletion-stat {
+  color: #b42318;
+  background: #fff1f0;
+}
+
+.addition-stat {
+  color: #18794e;
+  background: #ecfdf3;
+}
+
+.diff-code {
+  margin: 0;
+  padding: 18px;
+  overflow-x: auto;
+  background: #0f172a;
+  color: #e5e7eb;
+  font-size: 12px;
+  line-height: 1.7;
+  font-family:
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+}
+
+/* Purpose + safety */
+
+.change-purpose {
+  margin: 0 22px 18px;
+  padding: 14px 16px;
+  border: 1px solid #e1e6eb;
+  border-radius: 10px;
+  background: #fafbfc;
+}
+
+.change-purpose p {
+  margin: 6px 0 0;
+  color: #344054;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.change-review-note {
+  margin: 0 22px 22px;
+  padding: 13px 15px;
+  border: 1px solid #f0c36d;
+  border-radius: 9px;
+  background: #fffaf0;
+}
+
+.change-review-note strong {
+  color: #8a6100;
+  font-size: 12px;
+}
+
+.change-review-note p {
+  margin: 4px 0 0;
+  color: #7a5a12;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Responsive */
+
+@media (max-width: 700px) {
+  .change-review-header {
+    flex-direction: column;
+  }
+
+  .change-review-meta,
+  .change-state-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .change-diff-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .change-review-badge {
+    align-self: flex-start;
+  }
+}
+
+.source-file-path {
+  padding: 9px 14px;
+  border-bottom: 1px solid #e1e6eb;
+  background: #ffffff;
+  color: #667085;
+  font-family:
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.diff-line {
+  display: block;
+  min-width: max-content;
+  padding: 1px 12px;
+  white-space: pre;
+}
+
+.diff-line-added {
+  background: rgba(46, 160, 67, 0.22);
+  color: #aff5b4;
+}
+
+.diff-line-removed {
+  background: rgba(248, 81, 73, 0.22);
+  color: #ffdcd7;
+}
+
+.diff-line-hunk {
+  background: rgba(56, 139, 253, 0.18);
+  color: #a5d6ff;
+}
+
+.diff-line-header {
+  color: #8c959f;
+}
+
+.diff-line-context {
+  color: #e5e7eb;
+}

@@ -2,6 +2,7 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
+from backend.app.change_models import ChangeProposal
 
 
 class ActionType(str, Enum):
@@ -152,6 +153,8 @@ class RemediationAction(BaseModel):
     validation: Optional[ActionValidationResult] = None
 
     approval: Optional[ActionApproval] = None
+
+    change_proposal: Optional[ChangeProposal] = None
 
 class ActionEditRequest(BaseModel):
     parameters: Dict[str, Any] = Field(default_factory=dict)
