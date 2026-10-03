@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -23,6 +23,7 @@ class SourceCodeChange(BaseModel):
     language: str = "python"
     before_code: str
     proposed_code: str
+    generated_by: Literal["controlled_fallback", "developer_llm"] | None = None
 
 class ChangeProposal(BaseModel):
     """

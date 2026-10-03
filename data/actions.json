@@ -5460,5 +5460,117 @@
       "additions": 1,
       "deletions": 1
     }
+  },
+  {
+    "action_id": "4bdf46c4-29b1-4e8c-a040-629e01678d5e",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_scheduler_demo",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Controlled remediation recommended for the Scheduler incident.",
+      "source": "human_review"
+    },
+    "status": "succeeded",
+    "created_by": "l1-user",
+    "created_by_role": "L1",
+    "created_at": "2026-09-29T17:58:40.655851Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": {
+      "approval_id": "04b938ac-37a8-4a69-ad4d-473b6f5e7ecc",
+      "action_id": "4bdf46c4-29b1-4e8c-a040-629e01678d5e",
+      "decision": "approved",
+      "approved_by": "l1-approver",
+      "approver_role": "L1",
+      "comment": null,
+      "created_at": "2026-09-29T17:58:54.976160Z"
+    },
+    "change_proposal": {
+      "change_type": "runtime_configuration",
+      "target": "support_intelligence_scheduler_demo",
+      "title": "Airflow Runtime Configuration Change",
+      "description": "Controlled remediation recommended for the Scheduler incident.",
+      "before": {
+        "mode": "failure"
+      },
+      "after": {
+        "mode": "recovery"
+      },
+      "changes": [
+        {
+          "path": "mode",
+          "before": "failure",
+          "after": "recovery"
+        }
+      ],
+      "source_code": null,
+      "unified_diff": "--- before\n+++ proposed\n@@ -1,3 +1,3 @@\n {\n-  \"mode\": \"failure\"\n+  \"mode\": \"recovery\"\n }",
+      "additions": 1,
+      "deletions": 1
+    }
+  },
+  {
+    "action_id": "1703fb1e-466f-44d2-9e17-9877deb36090",
+    "request": {
+      "action_type": "trigger_dag",
+      "dag_id": "support_intelligence_configuration_review_demo",
+      "task_id": null,
+      "parameters": {
+        "mode": "recovery"
+      },
+      "reason": "Controlled remediation recommended for the Configuration incident.",
+      "source": "human_review"
+    },
+    "status": "pending_approval",
+    "created_by": "l1-user",
+    "created_by_role": "L1",
+    "created_at": "2026-10-01T15:50:36.809714Z",
+    "validation": {
+      "valid": true,
+      "action_type": "trigger_dag",
+      "risk_level": "low",
+      "required_role": "L1",
+      "approval_required": true,
+      "errors": [],
+      "warnings": [
+        "Human approval is required before this action can execute."
+      ]
+    },
+    "approval": null,
+    "change_proposal": {
+      "change_type": "runtime_configuration",
+      "target": "support_intelligence_configuration_review_demo",
+      "title": "Airflow Runtime Configuration Change",
+      "description": "Controlled remediation recommended for the Configuration incident.",
+      "before": {
+        "mode": "failure"
+      },
+      "after": {
+        "mode": "recovery"
+      },
+      "changes": [
+        {
+          "path": "mode",
+          "before": "failure",
+          "after": "recovery"
+        }
+      ],
+      "source_code": null,
+      "unified_diff": "--- before\n+++ proposed\n@@ -1,3 +1,3 @@\n {\n-  \"mode\": \"failure\"\n+  \"mode\": \"recovery\"\n }",
+      "additions": 1,
+      "deletions": 1
+    }
   }
 ]

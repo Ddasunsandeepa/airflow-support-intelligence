@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FeedbackQuality(str, Enum):
@@ -13,11 +13,13 @@ class FeedbackQuality(str, Enum):
 
 
 class RemediationFeedbackRequest(BaseModel):
-    useful: bool
+    model_config = ConfigDict(extra="forbid")
+
+    useful: bool = Field(strict=True)
 
     change_quality: FeedbackQuality
 
-    comment: Optional[str] = None
+    comment: Optional[str] = Field(default=None, max_length=4000)
 
 
 class RemediationFeedback(BaseModel):

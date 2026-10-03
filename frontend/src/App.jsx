@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import EngineerFeedback from "./EngineerFeedback";
+import UnifiedDiff from "./UnifiedDiff";
 
 const DEFAULT_EVIDENCE = {
   cpu_usage: 94,
@@ -53,6 +55,50 @@ function App() {
   const [sourceChangeLoading, setSourceChangeLoading] = useState(false);
   const [sourceChangeError, setSourceChangeError] = useState("");
 
+  const analyzeIncidentSelection = useCallback(async (incident) => {
+    setAirflowLoading(true);
+    setAirflowError("");
+    setAirflowResult(null);
+
+    try {
+      let response;
+
+      if (incident.type === "import_error") {
+        response = await fetch(
+          `/api/analyze-import-error?import_error_id=${encodeURIComponent(
+            incident.id
+          )}`,
+          {
+            method: "POST",
+          }
+        );
+      } else {
+        response = await fetch(
+          `/api/analyze-airflow?dag_id=${encodeURIComponent(incident.id)}`,
+          {
+            method: "POST",
+          }
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `Airflow analysis request failed with status ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+      setAirflowResult(data);
+    } catch {
+      setAirflowError(
+        "Could not analyze the selected Airflow incident. " +
+          "Make sure the Airflow API and FastAPI server are running."
+      );
+    } finally {
+      setAirflowLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const loadAirflowCatalog = async () => {
       setCatalogLoading(true);
@@ -88,7 +134,7 @@ function App() {
             id: String(data.import_errors[0].id),
           });
         }
-      } catch (err) {
+      } catch {
         setCatalogError(
           "Could not load the live Airflow incident catalog. " +
             "Make sure the FastAPI server is running."
@@ -125,7 +171,7 @@ function App() {
           setSelectedIncident(incident);
           await analyzeIncidentSelection(incident);
         }
-      } catch (err) {
+      } catch {
         // Keep polling quietly; manual analysis remains available.
       }
     };
@@ -138,7 +184,7 @@ function App() {
       cancelled = true;
       clearInterval(intervalId);
     };
-  }, []);
+  }, [analyzeIncidentSelection]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -170,7 +216,7 @@ function App() {
       const data = await response.json();
 
       setResult(data);
-    } catch (err) {
+    } catch {
       setError(
         "Could not connect to the Airflow Support Intelligence API. " +
           "Make sure the FastAPI server is running."
@@ -180,49 +226,6 @@ function App() {
     }
   };
 
-  const analyzeIncidentSelection = async (incident) => {
-    setAirflowLoading(true);
-    setAirflowError("");
-    setAirflowResult(null);
-
-    try {
-      let response;
-
-      if (incident.type === "import_error") {
-        response = await fetch(
-          `/api/analyze-import-error?import_error_id=${encodeURIComponent(
-            incident.id
-          )}`,
-          {
-            method: "POST",
-          }
-        );
-      } else {
-        response = await fetch(
-          `/api/analyze-airflow?dag_id=${encodeURIComponent(incident.id)}`,
-          {
-            method: "POST",
-          }
-        );
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          `Airflow analysis request failed with status ${response.status}`
-        );
-      }
-
-      const data = await response.json();
-      setAirflowResult(data);
-    } catch (err) {
-      setAirflowError(
-        "Could not analyze the selected Airflow incident. " +
-          "Make sure the Airflow API and FastAPI server are running."
-      );
-    } finally {
-      setAirflowLoading(false);
-    }
-  };
 
   const analyzeLiveAirflow = async () => {
     await analyzeIncidentSelection(selectedIncident);
@@ -418,6 +421,7 @@ const reviewDeveloperCodeChange = async (codeChange) => {
           "Developer Copilot source-code proposal.",
 
         language: codeChange.language || "python",
+        generated_by: codeChange.generated_by || null,
       }),
     });
 
@@ -606,6 +610,12 @@ const executeRemediationAction = async () => {
     setRemediationError(
       err.message || "Could not execute the remediation action."
     );
+    try {
+      const state = await fetch(`/api/actions/${encodeURIComponent(remediationAction.action_id)}`);
+      if (state.ok) setRemediationAction(await state.json());
+    } catch {
+      // Keep the original execution error visible if the backend is unreachable.
+    }
   } finally {
     setRemediationLoading(false);
   }
@@ -994,6 +1004,10 @@ const reanalyzeAfterRemediationFailure = async () => {
                 </ol>
               </div>
             </section>
+
+            {remediationAction && ["succeeded", "failed"].includes(remediationAction.status) && !remediationLoading && (
+              <EngineerFeedback key={remediationAction.action_id} actionId={remediationAction.action_id} />
+            )}
 
             {/* Safety */}
             <section className="safety-card">
@@ -1390,7 +1404,7 @@ const reanalyzeAfterRemediationFailure = async () => {
                     </p>
                   </div>
 
-                  <span className="tag">LLM</span>
+                  <span className="tag">CORRELATED</span>
                 </div>
 
                 <ul className="checks">
@@ -1585,7 +1599,8 @@ const reanalyzeAfterRemediationFailure = async () => {
 
                             {chat.data?.code_change && (
                               <div className="copilot-block">
-                                <h4>Code Change Proposal</h4>
+                                <h4>Proposed Source-Level Correction</h4>
+                                {chat.data.code_change.generated_by === "controlled_fallback" && <span className="tag">CONTROLLED FALLBACK ? REVIEW ONLY</span>}
 
                                 {chat.data.code_change.summary && (
                                   <p>
@@ -1711,9 +1726,10 @@ const reanalyzeAfterRemediationFailure = async () => {
                   <div>
                     <p className="card-label">SOURCE CODE CHANGE REVIEW</p>
 
-                    <h2>{sourceChangeProposal.title}</h2>
+                    <h2>Source Code Change Review</h2>
 
                     <p>{sourceChangeProposal.description}</p>
+                    {sourceChangeProposal.source_code?.generated_by === "controlled_fallback" && <p>Generated by a controlled deterministic fallback.</p>}
                   </div>
 
                   <span className="change-review-badge">
@@ -1791,46 +1807,7 @@ const reanalyzeAfterRemediationFailure = async () => {
                     </div>
                   </div>
 
-                  <div className="diff-code">
-                    {(sourceChangeProposal.unified_diff || "")
-                      .split("\n")
-                      .map((line, index) => {
-                        const isFileHeader =
-                          line.startsWith("---") ||
-                          line.startsWith("+++");
-
-                        const isAddition =
-                          line.startsWith("+") &&
-                          !line.startsWith("+++");
-
-                        const isDeletion =
-                          line.startsWith("-") &&
-                          !line.startsWith("---");
-
-                        const isHunk = line.startsWith("@@");
-
-                        let lineClass = "diff-line-context";
-
-                        if (isAddition) {
-                          lineClass = "diff-line-added";
-                        } else if (isDeletion) {
-                          lineClass = "diff-line-removed";
-                        } else if (isHunk) {
-                          lineClass = "diff-line-hunk";
-                        } else if (isFileHeader) {
-                          lineClass = "diff-line-header";
-                        }
-
-                        return (
-                          <div
-                            key={`${index}-${line}`}
-                            className={`diff-line ${lineClass}`}
-                          >
-                            {line || " "}
-                          </div>
-                        );
-                      })}
-                  </div>
+                  <UnifiedDiff diff={sourceChangeProposal.unified_diff} />
                 </div>
 
                 <div className="change-review-note">
@@ -1856,13 +1833,12 @@ const reanalyzeAfterRemediationFailure = async () => {
             <section className="card remediation-card">
               <div className="section-heading">
                 <div>
-                  <p className="card-label">V2 CONTROLLED REMEDIATION</p>
+                  <p className="card-label">CONTROLLED RUNTIME RECOVERY</p>
 
-                  <h2>Recommended Operational Action</h2>
+                  <h2>Controlled Runtime Recovery</h2>
 
                   <p>
-                    Actions are validated and require human approval before
-                    execution.
+                    This controlled synthetic recovery changes dag_run.conf after validation and human approval. It does not apply the proposed Python source correction.
                   </p>
                 </div>
 
@@ -1954,14 +1930,14 @@ const reanalyzeAfterRemediationFailure = async () => {
                     </div>
                   </div>
 
-                  {remediationAction.change_proposal && (
+                  {remediationAction.change_proposal?.change_type === "runtime_configuration" && (
                     <div className="change-review">
                       <div className="change-review-header">
                         <div>
-                          <p className="card-label">REMEDIATION CHANGE REVIEW</p>
-                          <h3>Review Proposed Change</h3>
+                          <p className="card-label">RUNTIME CHANGE REVIEW</p>
+                          <h3>Runtime Configuration Change</h3>
                           <p>
-                            Review exactly what will change before approving execution.
+                            Review runtime configuration before approving execution. No Python source file is changed.
                           </p>
                         </div>
 
@@ -1989,37 +1965,6 @@ const reanalyzeAfterRemediationFailure = async () => {
                         </div>
                       </div>
 
-                      {remediationAction.change_proposal.change_type === "source_code" ? (
-                      <div className="change-state-grid">
-                        <div className="change-state-panel">
-                          <div className="change-state-title">
-                            <span>CURRENT CODE</span>
-                          </div>
-
-                          <div className="source-file-path">
-                            {remediationAction.change_proposal.source_code?.file_path}
-                          </div>
-
-                          <pre>
-                            {remediationAction.change_proposal.source_code?.before_code}
-                          </pre>
-                        </div>
-
-                        <div className="change-state-panel proposed">
-                          <div className="change-state-title">
-                            <span>PROPOSED CODE</span>
-                          </div>
-
-                          <div className="source-file-path">
-                            {remediationAction.change_proposal.source_code?.file_path}
-                          </div>
-
-                          <pre>
-                            {remediationAction.change_proposal.source_code?.proposed_code}
-                          </pre>
-                        </div>
-                      </div>
-                    ) : (
                       <div className="change-state-grid">
                         <div className="change-state-panel">
                           <div className="change-state-title">
@@ -2049,8 +1994,6 @@ const reanalyzeAfterRemediationFailure = async () => {
                           </pre>
                         </div>
                       </div>
-                    )}
-
                       <div className="change-diff">
                         <div className="change-diff-header">
                           <div>
@@ -2069,43 +2012,7 @@ const reanalyzeAfterRemediationFailure = async () => {
                           </div>
                         </div>
 
-                        <div className="diff-code">
-                          {remediationAction.change_proposal.unified_diff
-                            .split("\n")
-                            .map((line, index) => {
-                              const isFileHeader =
-                                line.startsWith("---") || line.startsWith("+++");
-
-                              const isAddition =
-                                line.startsWith("+") && !line.startsWith("+++");
-
-                              const isDeletion =
-                                line.startsWith("-") && !line.startsWith("---");
-
-                              const isHunk = line.startsWith("@@");
-
-                              let lineClass = "diff-line-context";
-
-                              if (isAddition) {
-                                lineClass = "diff-line-added";
-                              } else if (isDeletion) {
-                                lineClass = "diff-line-removed";
-                              } else if (isHunk) {
-                                lineClass = "diff-line-hunk";
-                              } else if (isFileHeader) {
-                                lineClass = "diff-line-header";
-                              }
-
-                              return (
-                                <div
-                                  key={`${index}-${line}`}
-                                  className={`diff-line ${lineClass}`}
-                                >
-                                  {line || " "}
-                                </div>
-                              );
-                            })}
-                        </div>
+                        <UnifiedDiff diff={remediationAction.change_proposal.unified_diff} />
                       </div>
 
                       <div className="change-purpose">
@@ -2116,8 +2023,7 @@ const reanalyzeAfterRemediationFailure = async () => {
                       <div className="change-review-note">
                         <strong>Human review required</strong>
                         <p>
-                          This proposal has not been executed. Review the exact change
-                          before approving the remediation action.
+                          This review describes runtime configuration only. Execution requires validation and human approval; it never applies the source-code proposal.
                         </p>
                       </div>
                     </div>
@@ -2185,6 +2091,7 @@ const reanalyzeAfterRemediationFailure = async () => {
                             <span>Recovery Mode</span>
 
                             <select
+                              aria-label="Recovery Mode"
                               value={remediationParameters.mode || "failure"}
                               onChange={(event) =>
                                 setRemediationParameters((previous) => ({
@@ -2234,7 +2141,7 @@ const reanalyzeAfterRemediationFailure = async () => {
                     </>
                   )}
 
-                  {remediationAction.status === "approved" && (
+                  {remediationAction.status === "approved" && remediationAction.change_proposal?.change_type !== "source_code" && (
                     <button
                       className="analyze-button"
                       onClick={executeRemediationAction}
@@ -2366,6 +2273,10 @@ const reanalyzeAfterRemediationFailure = async () => {
                 </div>
               )}
             </section>
+
+            {remediationAction && ["succeeded", "failed"].includes(remediationAction.status) && !remediationLoading && (
+              <EngineerFeedback key={remediationAction.action_id} actionId={remediationAction.action_id} />
+            )}
 
             {/* Safety */}
             <section className="safety-card">
