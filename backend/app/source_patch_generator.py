@@ -35,6 +35,10 @@ def generate_source_patch(
             failure_message=failure_message,
         )
 
+    if dag_id == "support_intelligence_supervisor_demo":
+        return _supervisor_demo_change(failure_message)
+    if dag_id == "support_intelligence_kubernetes_resource_demo":
+        return _kubernetes_resource_demo_change(failure_message)
     return None
 
 
@@ -87,7 +91,7 @@ def _configuration_patch(
     evidence_description = (
         failure_message.strip()
         if failure_message
-        else "The controlled configuration evidence indicates invalid configuration."
+        else "Controlled configuration demo template; confirm it against the observed evidence."
     )
 
     return SourcePatchSuggestion(
@@ -102,5 +106,90 @@ def _configuration_patch(
             "The proposed change supplies valid configuration values "
             "and validates them before the task continues."
         ),
+        generated_by="controlled_fallback",
+    )
+
+def _supervisor_demo_change(failure_message: str | None) -> SourcePatchSuggestion:
+    proposed_function = '''def supervisor_demo_incident(**context):
+    dag_run = context.get("dag_run")
+    mode = "failure"
+
+    if dag_run and dag_run.conf:
+        mode = dag_run.conf.get("mode", "failure")
+
+    synthetic_pod_status = "Healthy"
+    synthetic_restart_count = 0
+    synthetic_exit_code = 0
+
+    if mode == "recovery":
+        print("SUPERVISOR DEMO RECOVERY: Synthetic incident recovery completed successfully.")
+        return "recovered"
+
+    if synthetic_pod_status != "Healthy":
+        raise RuntimeError(
+            "Synthetic supervisor demo failure detected: "
+            f"PodStatus={synthetic_pod_status}, "
+            f"RestartCount={synthetic_restart_count}, "
+            f"ExitCode={synthetic_exit_code}"
+        )
+
+    return "healthy"'''
+    return SourcePatchSuggestion(
+        function_name="supervisor_demo_incident",
+        proposed_function=proposed_function,
+        summary="Proposed source-level correction for the controlled synthetic demo.",
+        reason=(failure_message or "Review the controlled synthetic failure.")
+        + " This deterministic proposal remains review-only.",
+        generated_by="controlled_fallback",
+    )
+
+
+def _kubernetes_resource_demo_change(failure_message: str | None) -> SourcePatchSuggestion:
+    proposed_function = '''def kubernetes_resource_demo(**context):
+    dag_run = context.get("dag_run")
+    mode = "failure"
+
+    if dag_run and dag_run.conf:
+        mode = dag_run.conf.get("mode", "failure")
+
+    synthetic_pod_status = "Running"
+    synthetic_restart_count = 0
+    synthetic_exit_code = 0
+
+    if mode == "recovery":
+        print(
+            "SUPPORT_INTELLIGENCE_K8S: "
+            f"PodStatus={synthetic_pod_status} "
+            f"RestartCount={synthetic_restart_count} "
+            f"ExitCode={synthetic_exit_code}"
+        )
+
+        print(
+            "KUBERNETES RESOURCE DEMO RECOVERY: "
+            "Synthetic workload recovered successfully."
+        )
+
+        return "recovered"
+
+    if synthetic_pod_status != "Running":
+        raise RuntimeError(
+            "Synthetic Kubernetes resource failure detected: "
+            f"PodStatus={synthetic_pod_status}, "
+            f"RestartCount={synthetic_restart_count}, "
+            f"ExitCode={synthetic_exit_code}"
+        )
+
+    print(
+        "KUBERNETES RESOURCE DEMO HEALTHY: "
+        "Synthetic Kubernetes workload is healthy."
+    )
+
+    return "healthy"'''
+    return SourcePatchSuggestion(
+        function_name="kubernetes_resource_demo",
+        proposed_function=proposed_function,
+        summary="Proposed source-level correction for the controlled synthetic demo.",
+        reason=(failure_message or "Review the controlled synthetic failure.")
+        + " This deterministic proposal remains review-only.",
         generated_by="controlled_fallback",
     )

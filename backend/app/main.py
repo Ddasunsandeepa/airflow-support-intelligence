@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Literal
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -25,6 +26,9 @@ from backend.app.action_store import ActionStore
 from backend.app.action_models import ActionRequest, ActionEditRequest
 
 from backend.app.action_models import ActionType
+from backend.app.action_models import ActionStatus
+from backend.app.feedback_models import RemediationFeedback, RemediationFeedbackRequest
+from backend.app.feedback_store import FeedbackStore
 from backend.app.action_registry import get_action_policy
 
 from backend.app.developer_models import (
@@ -45,6 +49,7 @@ class SourceCodeChangeProposalRequest(BaseModel):
     proposed_code: str = Field(min_length=1)
     description: str = Field(min_length=1)
     language: str = "python"
+    generated_by: Literal["controlled_fallback", "developer_llm"] | None = None
 
 app = FastAPI(
     title="Airflow Support Intelligence",
@@ -72,6 +77,7 @@ action_service = ActionService(
 )
 
 action_store = ActionStore()
+feedback_store = FeedbackStore()
 
 
 class IncidentEvidence(BaseModel):
@@ -585,6 +591,31 @@ def get_action(action_id: str):
 
     return remediation.model_dump(mode="json")
 
+
+@app.get("/actions/{action_id}/feedback", response_model=RemediationFeedback | None)
+def get_remediation_feedback(action_id: str):
+    if action_store.get(action_id) is None:
+        raise HTTPException(status_code=404, detail="Action was not found.")
+    try:
+        return feedback_store.get_for_action(action_id)
+    except (OSError, ValueError):
+        raise HTTPException(status_code=503, detail="Feedback storage is unavailable.") from None
+
+
+@app.post("/actions/{action_id}/feedback", response_model=RemediationFeedback)
+def submit_remediation_feedback(action_id: str, request: RemediationFeedbackRequest):
+    """Store evaluation only. Repeated submissions return the first saved record."""
+    action = action_store.get(action_id)
+    if action is None:
+        raise HTTPException(status_code=404, detail="Action was not found.")
+    if action.status not in {ActionStatus.SUCCEEDED, ActionStatus.FAILED}:
+        raise HTTPException(status_code=409, detail="Feedback is available after execution finishes.")
+    feedback = RemediationFeedback(action_id=action_id, **request.model_dump())
+    try:
+        return feedback_store.save(feedback)
+    except (OSError, ValueError):
+        raise HTTPException(status_code=503, detail="Feedback could not be saved. Existing records were preserved.") from None
+
 # --------------------------------------------------
 # V2 Controlled Remediation
 # --------------------------------------------------
@@ -759,6 +790,7 @@ def create_source_code_change_proposal(
         proposed_code=request.proposed_code,
         description=request.description,
         language=request.language,
+        generated_by=request.generated_by,
     )
 
 # --------------------------------------------------

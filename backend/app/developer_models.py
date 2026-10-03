@@ -51,6 +51,7 @@ class CodeChangeProposal(BaseModel):
 
     before_code: Optional[str] = None
     proposed_code: Optional[str] = None
+    generated_by: Optional[Literal["controlled_fallback", "developer_llm"]] = None
 
 class DeveloperChatResponse(BaseModel):
     """

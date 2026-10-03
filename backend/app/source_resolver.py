@@ -1,10 +1,11 @@
 from pathlib import Path
+import os
 from typing import Optional
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-DAG_SOURCE_ROOT = PROJECT_ROOT.parent / "airflow" / "dags"
+DAG_SOURCE_ROOT = Path(os.getenv("AIRFLOW_DAG_SOURCE_ROOT", str(PROJECT_ROOT.parent / "airflow" / "dags")))
 
 
 def resolve_dag_source(
@@ -24,6 +25,8 @@ def resolve_dag_source(
         return None
 
     dag_id = dag_id.strip()
+    if any(character in dag_id for character in ("/", "\\", ":", "\x00")) or dag_id in {".", ".."}:
+        return None
 
     # Normal Airflow convention used by our demo DAGs.
     candidate = DAG_SOURCE_ROOT / f"{dag_id}.py"
@@ -38,7 +41,10 @@ def resolve_dag_source(
     except (ValueError, OSError):
         return None
 
-    if not resolved_candidate.is_file():
+    try:
+        if not resolved_candidate.is_file():
+            return None
+    except OSError:
         return None
 
     return resolved_candidate
@@ -59,9 +65,8 @@ def read_dag_source(
         return None
 
     try:
-        return source_path.read_text(
-            encoding="utf-8"
-        )
+        with source_path.open(encoding="utf-8", newline="") as source_file:
+            return source_file.read()
     except (OSError, UnicodeError):
         return None
 

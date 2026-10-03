@@ -165,6 +165,7 @@ def build_source_code_change_proposal(
     proposed_code: str,
     description: str,
     language: str = "python",
+    generated_by: str | None = None,
 ) -> ChangeProposal:
     """
     Build a reviewable source-code change proposal.
@@ -209,6 +210,7 @@ def build_source_code_change_proposal(
             language=language,
             before_code=before_code,
             proposed_code=proposed_code,
+            generated_by=generated_by,
         ),
         unified_diff="\n".join(diff_lines),
         additions=additions,

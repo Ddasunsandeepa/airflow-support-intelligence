@@ -166,11 +166,18 @@ def test_all_providers_down(monkeypatch):
 
 
 @pytest.mark.parametrize("incident_type", ["dag", "import_error"])
-def test_chat_endpoint_survives_quota_failure(monkeypatch, incident_type):
+def test_chat_endpoint_survives_quota_failure(monkeypatch, incident_type, tmp_path):
     from fastapi.testclient import TestClient
     from backend.app.evidence import AirflowEvidence
     from backend.app.incident_evidence import IncidentEvidence
     from backend.app.main import app
+    from backend.app import source_resolver
+
+    monkeypatch.setattr(source_resolver, "DAG_SOURCE_ROOT", tmp_path)
+    (tmp_path / "support_intelligence_supervisor_demo.py").write_text(
+        "def supervisor_demo_incident(**context):\n    raise RuntimeError('Synthetic failure')\n",
+        encoding="utf-8",
+    )
 
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")

@@ -13,6 +13,7 @@ from backend.app.verification import VerificationEngine
 from backend.app.change_review import (
     build_runtime_change_proposal,
 )
+from backend.app.change_models import ChangeType
 
 
 class ActionService:
@@ -130,6 +131,9 @@ class ActionService:
         self,
         remediation: RemediationAction,
     ) -> dict:
+
+        if remediation.change_proposal is not None and remediation.change_proposal.change_type == ChangeType.SOURCE_CODE:
+            raise PermissionError("Source-code proposals are review-only and cannot be executed.")
 
         if remediation.validation is None:
             raise ValueError(

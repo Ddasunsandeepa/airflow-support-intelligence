@@ -389,8 +389,17 @@ def analyze_developer_request(
         incident_class,
         airflow_evidence,
     )
+
     if incident_type == "dag" and dag_id:
-        controlled_change = get_controlled_source_change(dag_id)
+        controlled_change = get_controlled_source_change(
+            dag_id=dag_id,
+            incident_class=incident_class,
+            failure_message=(
+                airflow_evidence.failure_exception_message
+                if airflow_evidence is not None
+                else None
+            ),
+        )
 
         if controlled_change is not None:
             code_change = CodeChangeProposal(
@@ -402,6 +411,13 @@ def analyze_developer_request(
                 language=controlled_change.language,
                 before_code=controlled_change.before_code,
                 proposed_code=controlled_change.proposed_code,
+                generated_by=controlled_change.generated_by,
+            )
+        else:
+            code_change = CodeChangeProposal(
+                available=False,
+                summary="No reviewed source proposal available.",
+                reason="No supported patch with valid current source is available for this DAG. Evidence analysis remains available.",
             )
 
     tests_to_run = _build_tests(
@@ -429,7 +445,7 @@ def analyze_developer_request(
         if developer_llm_result["tests_to_run"]:
             tests_to_run = developer_llm_result["tests_to_run"]
 
-        if developer_llm_result["code_change_summary"]:
+        if developer_llm_result["code_change_summary"] and not code_change.available and incident_type != "dag":
             code_change = code_change.model_copy(
                 update={
                     "summary": developer_llm_result[
