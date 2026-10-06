@@ -1,769 +1,397 @@
 # Adaptive Airflow Support Intelligence Platform
 
-For Gemini, Ollama, OpenAI, and evidence fallback configuration, see
-[LLM provider setup](docs/llm-setup.md).
+A local proof of concept for investigating Airflow failures and performing
+engineer-reviewed remediation. It combines actual Airflow evidence, a synthetic-data
+Random Forest classifier, SHAP explanations, deterministic evidence rules, optional
+LLM reasoning and runbooks in a React operations console.
 
-For source review, approved runtime recovery, and Engineer Feedback, follow the
-[supervisor demo guide](docs/supervisor-demo.md).
+**Current documentation: 6 October 2026.** New supported DAGs can use the source
+review and execution workflow without registering their names or adding predefined
+patches. Human approval and explicit execution are required before applying a fix.
 
-### AI-Assisted L1 Incident Investigation, Explainability & Escalation Support
+## What the supervisor can evaluate
 
-An Airflow-specific operational intelligence platform designed to assist L1 engineers in investigating Airflow incidents by automatically detecting failures, collecting operational evidence, classifying incident types, explaining ML predictions, mapping incidents to runbooks, and providing investigation and escalation guidance.
+- Analyze failed DAG runs and DAG import errors using Airflow evidence.
+- Inspect Summary, Timeline, Evidence, Intelligence and Runbook views.
+- Compare ML, evidence-rule and LLM contributions without hiding missing data.
+- Ask Developer Copilot to investigate actual task source and propose a correction.
+- Review/edit a source diff, validate it and approve its exact revision/hash.
+- Explicitly apply the approved change, verify a corrected run and inspect the audit.
+- Submit Engineer Feedback and reopen persisted reviews/results after navigation.
 
-> **V1 Working Proof of Concept — September 2026**
+Incident classes include Scheduler, DAG Parsing, Resource, Kubernetes,
+Configuration, Application Code and Unknown. Application Code is supported by the
+hybrid/evidence layer; this does not imply the original ML model was retrained.
+SHAP explains model contributions, not causal proof. Deterministic confidence is
+rule strength, not calibrated causal probability.
 
----
+```mermaid
+flowchart LR
+    A[Airflow API and task logs] --> B[FastAPI evidence collection]
+    B --> C[ML and SHAP / evidence rules / optional LLM]
+    C --> D[Investigation and runbooks]
+    D --> E[Developer Copilot and actual DAG source]
+    E --> F[Engineer review, validation and exact-version approval]
+    F --> G[Explicit execution: backup, apply, parse, trigger, verify]
+    G --> H[Persisted review, audit and feedback]
+```
 
-## Overview
+## Prerequisites and repository layout
 
-Airflow incident investigation often requires engineers to correlate information from multiple sources, including:
+The main instructions below use **Windows PowerShell** and run the backend/frontend
+on the host. Replace `D:\Projects` with your own parent directory consistently.
 
-- Airflow DAG and task states
-- Task failure logs
-- Scheduler signals
-- DAG parsing information
-- Kubernetes-related evidence
-- Operational metrics
-- Recent changes
-- Support runbooks
-
-This information can be fragmented across different tools, making incident investigation dependent on manual correlation and engineer experience.
-
-The **Adaptive Airflow Support Intelligence Platform** explores a specialized intelligence layer above existing Airflow and operational tooling.
-
-The platform aims to help answer:
-
-> **What is likely wrong? Why does the system think that? What should the L1 engineer check next? Should the incident remain at L1 or be escalated?**
-
-The system does **not** automatically modify production systems. The final decision remains with the support engineer.
-
----
-
-## Key Features
-
-### Automatic Incident Detection
-
-The platform monitors Airflow for new failed DAG runs and automatically initiates the investigation workflow.
+| Requirement | Notes |
+| --- | --- |
+| Python 3.12 | Development environment checked with 3.12.10; use the pinned backend dependencies. |
+| Node.js 22.12+ and npm | Development environment checked with Node 22.22.3. |
+| A running, compatible Airflow 3 environment | Must expose token authentication and `/api/v2` endpoints for evidence, source/version inspection and triggering. The separate local Compose file specifies Airflow 3.3.1. |
+| Local access to its DAG source directory | Airflow and this backend must see the same files. Application needs write access. |
+| A configured Gemini, OpenAI or Ollama provider | Required for ordinary AI source proposals; evidence-only analysis can work without an LLM. |
+| Docker Desktop/Compose | Needed only if using the separate containerized Airflow environment. |
+| Chrome and Python Playwright | Optional: browser regression tests. |
 
 ```text
-New Airflow Failure
-        ↓
-Automatic Incident Detection
-        ↓
-Evidence Collection
-        ↓
-Incident Analysis
+D:/Projects/
+  airflow/                         Separate Airflow environment
+    docker-compose.yaml
+    dags/                          Actual files parsed by Airflow
+  airflow-support-intelligence/    This repository
+    backend/app/                   FastAPI and remediation services
+    backend/models/                Included trained model bundle
+    backend/data/                  Synthetic training dataset
+    frontend/                      React/Vite console
+    demo_dags/                     Intentionally failing sample source
+    runbooks/                      Investigation guidance
+    data/                          Local runtime stores and source backups
+    tests/                         Isolated backend/browser tests
+    docs/                          Detailed design and verification reports
 ```
 
-No manual incident selection is required for the V1 demonstration.
+**Airflow itself is not provisioned by this repository.** On another machine,
+prepare the separate Airflow environment first (or obtain the project's separate
+Airflow Compose setup from the author). Confirm its credentials, API port and DAG
+bind mount. In the author's setup, `./dags` is mounted at `/opt/airflow/dags` and
+Airflow is exposed on host port `8088`. A fresh Airflow deployment also needs its
+own database initialization and user setup before these instructions can connect.
 
-### Airflow Evidence Collection
+The root `docker-compose.yml` in **this** repository references prebuilt support-app
+images. It does not start Airflow or configure the shared writable DAG directory,
+LLM settings and persistent stores for this complete workflow. Use the host setup
+below for the documented evaluation; a fresh clone is not a one-command Docker demo.
 
-The backend connects to Airflow through the Airflow REST API and collects available operational evidence such as:
+## 1. Install the support application
 
-- DAG information
-- DAG run state
-- Task instance state
-- Failed task information
-- Operator information
-- Task duration
-- Retry information
-- Failure logs
-- Exception type
-- Exception message
-- DAG import errors
+Obtain this repository and open PowerShell in its root. Ensure the supplied copy
+includes all current source files, `frontend/package-lock.json`,
+`backend/models/incident_classifier.joblib` and the demo DAGs.
 
-### ML-Based Incident Classification
+```powershell
+cd D:\Projects\airflow-support-intelligence
+py -3.12 -m venv .venv
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+cd frontend
+npm.cmd ci
+cd ..
+```
 
-A Random Forest classifier is used to classify incidents into six V1 categories:
+No virtual-environment activation is required when using these commands.
+The model and synthetic dataset are included; retraining is not required to start.
+Only if intentionally rebuilding the model, run `ml/generate_data.py` followed by
+`ml/train.py` with the virtual-environment Python. These overwrite generated artifacts.
 
-- Scheduler
-- DAG Parsing
-- Resource
-- Kubernetes
-- Configuration
-- Unknown
+## 2. Configure the backend
 
-The model is trained using synthetic, scenario-based incident data.
+Create a local environment file **without overwriting an existing one**:
 
-### Explainable AI with SHAP
+```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+```
 
-The platform uses SHAP to provide feature-level explanations for the ML prediction.
+Edit `.env` locally:
 
-Instead of only displaying:
+```dotenv
+AIRFLOW_API_URL=http://localhost:8088
+AIRFLOW_USERNAME=your-local-airflow-username
+AIRFLOW_PASSWORD=your-local-airflow-password
+AIRFLOW_DAG_SOURCE_ROOT=D:/Projects/airflow/dags
+
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your-own-api-key
+GEMINI_MODEL=your-accessible-model-id
+LLM_FALLBACK_PROVIDERS=
+```
+
+Use your actual Airflow credentials and a model available to your provider account.
+The example file contains the project's previously tested model setting; availability,
+quota and latency are account-dependent. See [provider setup](docs/llm-setup.md) for
+Gemini, Ollama and OpenAI configuration. Do not send API keys or your `.env` with the project.
+
+For evidence-only analysis, set `LLM_PROVIDER=none`. It does **not** generate ordinary
+AI source corrections. Two bundled demos have an explicitly opted-in, visibly labelled
+fallback for testing infrastructure; it is not AI-generated and is not available for
+arbitrary new DAGs. Keep the fallback unchecked when evaluating real AI proposals.
+
+Existing terminal environment variables override `.env`. For example, if a previous
+test set a terminal override, remove it before starting the backend:
+
+```powershell
+Remove-Item Env:LLM_PROVIDER -ErrorAction SilentlyContinue
+```
+
+Changing `.env` requires restarting the backend. The source root must be the actual
+local directory shared with Airflow, not this repository's `demo_dags` directory.
+
+## 3. Start services and check connectivity
+
+If using the already initialized separate Airflow stack, start it in terminal A:
+
+```powershell
+cd D:\Projects\airflow
+docker compose up -d
+```
+
+Start the backend in terminal B:
+
+```powershell
+cd D:\Projects\airflow-support-intelligence
+.venv/Scripts/python.exe -B -m uvicorn backend.app.main:app --reload --env-file .env
+```
+
+Start the frontend in terminal C:
+
+```powershell
+cd D:\Projects\airflow-support-intelligence\frontend
+npm.cmd run dev
+```
+
+| Service | Local URL |
+| --- | --- |
+| Airflow | http://localhost:8088 |
+| Support console | http://localhost:5173/#/overview |
+| Backend health | http://localhost:8000/health |
+| Interactive API documentation | http://localhost:8000/docs |
+
+Use the frontend port printed by Vite if it differs. Vite proxies `/api` to the
+backend on `127.0.0.1:8000`. Keep one backend instance for the local JSON stores.
+
+In another terminal, check the API and Airflow connection:
+
+```powershell
+Invoke-RestMethod http://localhost:8000/health
+Invoke-RestMethod http://localhost:8000/airflow-catalog
+```
+
+Backend health alone does not prove the Airflow credentials work; the catalog check
+must also succeed. No DAG is triggered by these checks. Stop host services with
+Ctrl+C in their terminals when finished; do not stop them during an execution.
+
+## 4. First end-to-end evaluation: customer discounts
+
+Use the included [customer-discount DAG](demo_dags/support_intelligence_customer_discount_remediation_demo.py).
+It contains three customers and intentionally calls `.lower()` on a missing tier.
+The business rule is gold=20%, silver=10%, missing/invalid tier=no discount.
+
+### Install the intentionally failing source
+
+From the repository root, set the same source directory as `.env`, then install:
+
+```powershell
+$env:AIRFLOW_DAG_SOURCE_ROOT = 'D:/Projects/airflow/dags'
+.venv/Scripts/python.exe -B scripts/reset_code_remediation_demo.py --confirm-reset --dag-id support_intelligence_customer_discount_remediation_demo
+```
+
+The reset script does not load `.env` itself. Check its printed target path. It
+backs up an existing file before restoring the buggy baseline; it does not trigger
+Airflow. Run it only when no review execution for this DAG is active.
+
+### Create and investigate the failure
+
+1. In Airflow, wait for `support_intelligence_customer_discount_remediation_demo`
+   to appear, unpause it if necessary, and trigger it with `{}`.
+2. Wait for failure. In `calculate_customer_discounts` logs, confirm
+   `AttributeError: 'NoneType' object has no attribute 'lower'`.
+3. In the support console, open **Incidents**, **Refresh catalog**, search for
+   `customer_discount`, then **Open incident** and **Analyze Live Airflow**.
+4. Confirm the selected run ID and evidence. Expected class: **Application Code**.
+   With insufficient ML features and unavailable LLM, the existing deterministic
+   path reports **EVIDENCE_SIGNAL_FALLBACK** and human review. A configured LLM can
+   produce another decision mode; missing ML features should not be invented.
+5. Inspect **Summary**, **Timeline**, **Evidence**, **Intelligence** and **Runbook**.
+
+### Request and review a correction
+
+Open the incident's **Developer Copilot**, leave demo fallback unchecked, and send:
 
 ```text
-Incident: Resource
-Confidence: 73.5%
+Investigate the latest failed customer-discount run using its actual source
+and exception. Propose a minimal correction for missing customer tiers.
+Preserve all three customer records, imports, function signature and DAG/task
+declarations. Gold receives 20%, silver 10%, and missing, blank or non-string
+tiers receive no discount. Do not add recovery modes. Explain evidence,
+risks and tests.
 ```
 
-the system can also show which features contributed most strongly to the prediction.
+6. Inspect the provider diagnostics, reasoning and proposed change. Follow
+   **Review Proposed Change** from this new response, not an old completed review.
+7. In **Source & diff**, inspect the original source, proposed source, provenance,
+   saved revision/hash and exact diff. Preserve the customer with `None`.
+8. If you edit, click **Save Reviewed Version**. Otherwise the proposal is already
+   saved and that button may be disabled. Click **Validate Changes**.
+9. Open **Validation & approval**, inspect checks, enter a reviewer name, select
+   **L2**, and click **Approve Reviewed Change**. Confirm the exact DAG/revision/hash.
+   Editing afterward invalidates validation and approval.
 
-Example:
+### Execute, verify and record feedback
 
-```text
-Top contributing features:
+10. Open **Execution & feedback** and explicitly confirm **Execute Approved
+    Remediation**. This backs up and writes source, waits for Airflow recognition,
+    triggers a corrected run with `{}`, and verifies it. Approval alone does not execute.
+11. Wait for `succeeded` and `Verification: verified`. Open the corrected run ID
+    in Airflow and check its task logs and business results:
 
-Memory Usage       → strong contribution
-CPU Usage          → strong contribution
-DAG Parse Time     → moderate contribution
+| Customer | Expected final total |
+| --- | ---: |
+| CUST-1001 | 400.0 |
+| CUST-1002 | 270.0 |
+| CUST-1003 | 250.0 |
+
+The logs should also report `ProcessedCustomers=3`. The original failed run remains
+failed; successful remediation creates a separate run.
+
+12. Submit **Useful/Not Useful**, required **Change quality**, and an optional comment.
+    Confirm **Feedback saved successfully**. Feedback does not execute anything or retrain ML.
+13. Navigate away, then open **Source Reviews**, find this review and choose
+    **View Result**. Reload and confirm persisted results/feedback. Inspect **Audit**.
+
+## 5. Repeat a demonstration or use a new DAG
+
+For a repeat bundled demo, restore its baseline with the explicit reset command,
+wait for Airflow's source view to reflect it, and trigger a fresh failure. Start a
+**new investigation and proposal**. Do not reuse an old approved/completed review.
+Source Reviews intentionally preserves historical results; its **Start a new
+investigation** link returns to the incident workspace. Do not delete history to repeat a demo.
+
+New DAGs do not require a registry entry or handcrafted patch. Supported scope:
+
+- File is `<dag_id>.py` directly under the configured trusted source root.
+- One static matching DAG ID and a static task ID mapped through `python_callable`
+  to an unambiguous existing top-level function in that file.
+- One function-body correction, preserving imports, declarations, signature and
+  existing literal input datasets. Multiple tasks may be present.
+- A valid AI proposal, exact-version validation/approval and explicit execution.
+- Airflow can expose matching source/version information and run it with `{}`.
+
+Add a new source file yourself, trigger its failure, then follow the same UI steps.
+The reset script is only for its two bundled fixtures. Dynamic/generated identities,
+TaskFlow or imported/shared callables without this mapping, multiple DAGs per file,
+and multi-file/import changes are not automatically executable. The UI shows the
+policy reason. See [general source execution](docs/general-source-execution.md).
+
+Old policy-version-1 reviews remain readable but cannot gain new execution permissions.
+Generate a new proposal after upgrading. Static checks are not a Python sandbox and
+cannot prove business correctness; inspect any code and external effects before approval.
+
+## Console navigation
+
+| View | Purpose |
+| --- | --- |
+| Overview | Actual API/catalog status, session investigations and saved source activity |
+| Incidents | Search DAGs/import errors and explicitly analyze latest evidence |
+| Investigation | Summary, Timeline, Evidence, Intelligence, Runbook |
+| Developer Copilot | Source/evidence investigation and proposal generation |
+| Remediation | Separate source investigation and operational action workflows |
+| Source Reviews | Persisted proposals, revisions and completed results |
+| Audit & feedback | Persisted source activity and feedback references |
+| Manual evidence tool | Separate manual ML input analysis |
+
+Detection polls for failures and displays a notice; it does not silently switch your
+active incident or execute remediation. Operational actions are distinct from source
+writes. Do not assume a DAG implements `mode=recovery`; most application-code demos do not.
+
+## Troubleshooting
+
+| Symptom | Check or next step |
+| --- | --- |
+| Airflow catalog fails | Airflow server, API URL/port, credentials and authentication. |
+| DAG missing | Correct directory/bind mount, parsing delay, Airflow import errors, then Refresh catalog. |
+| Source cannot be resolved | `AIRFLOW_DAG_SOURCE_ROOT`, matching filename/DAG ID, local access and no links/traversal. |
+| ML says insufficient features | Actual telemetry is missing; inspect evidence-rule/LLM attribution instead. |
+| No AI proposal / quota error | Provider diagnostics, key/model/quota or local Ollama availability. Do not relabel fallback as AI. |
+| Old successful workflow appears | It is a saved Source Review. Start a new investigation, analyze the new failed run and request a fresh proposal. |
+| Validation/approval blocked | Read the policy/check errors; preserve scope/data, save edits, validate, enter reviewer, use a new policy-version-2 proposal. |
+| Source changed / stale proposal | Investigate current source and create a fresh proposal. Do not force an old approval. |
+| Parse or execution failed | Inspect audit, backup and Airflow state. No automatic retry; do not repeatedly trigger/reset. |
+| Feedback disabled | Wait for terminal remediation and saved-state load; choose both usefulness and change quality. |
+| Settings seem ignored | Terminal variables override `.env`; restart the backend after configuration changes. |
+
+## Tests and evidence
+
+Last complete recorded verification (6 October 2026): **260 passed, 0 failed,
+0 skipped**, including **10 browser scenarios**; frontend lint/build passed.
+There were four dependency deprecation warnings. This is regression evidence, not
+an assertion that every external provider or deployment has been live-tested.
+
+Backend tests (browser cases are opt-in):
+
+```powershell
+.venv/Scripts/python.exe -B -m pytest tests -q -p no:cacheprovider
 ```
 
-SHAP explanations describe the model's decision contribution and should not be interpreted as proof of causal relationships.
+Optional complete run, with Chrome installed:
 
-### Runbook Mapping
-
-The predicted incident class is mapped to the corresponding support runbook.
-
-```text
-Incident Classification
-        ↓
-Runbook Matching
-        ↓
-Airflow-Specific L1 Checks
+```powershell
+.venv/Scripts/python.exe -m pip install playwright
+cd frontend
+npm.cmd run lint
+npm.cmd run build
+cd ..
+$env:RUN_BROWSER_TESTS = '1'
+.venv/Scripts/python.exe -B -m pytest tests -q -p no:cacheprovider
+Remove-Item Env:RUN_BROWSER_TESTS
 ```
 
-Current runbooks include:
-
-```text
-runbooks/
-├── scheduler.md
-├── dag_parsing.md
-├── resource.md
-├── kubernetes.md
-├── configuration.md
-└── unknown.md
-```
-
-### L1 Recommendation & Escalation Guidance
-
-The platform generates investigation guidance based on:
-
-- Predicted incident type
-- Model confidence
-- SHAP contributors
-- Available evidence
-- Matched runbook
-
-The output provides suggested L1 investigation steps and indicates whether additional evidence should be gathered or escalation should be considered.
-
-The system supports the engineer rather than replacing the engineer's decision.
-
----
-
-## V1 Architecture
-
-```text
-                    ┌─────────────────────┐
-                    │   Local Airflow     │
-                    │                     │
-                    │ DAGs / Tasks / Logs │
-                    └──────────┬──────────┘
-                               │
-                         Airflow REST API
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │    FastAPI Backend  │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │   Evidence Engine   │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │   Feature Pipeline  │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │ Random Forest Model │
-                    │  Incident Classifier│
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │   SHAP Explanation  │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │   Runbook Engine    │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │ L1 Recommendation   │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │   React + Vite      │
-                    │    L1 Dashboard     │
-                    └─────────────────────┘
-```
-
-## Investigation Workflow
-
-The complete V1 workflow is:
-
-```text
-New DAG Failure
-      ↓
-Automatic Detection
-      ↓
-Airflow Evidence Collection
-      ↓
-Feature Extraction
-      ↓
-ML Classification
-      ↓
-SHAP Explanation
-      ↓
-Runbook Matching
-      ↓
-L1 Recommendation
-      ↓
-Resolve / Escalate
-```
-
----
-
-## ML Training
-
-The training dataset is generated synthetically using scenario-based incident patterns.
-
-The generated dataset contains approximately 1,000 synthetic incident records covering the six V1 incident classes.
-
-### Features
-
-The current ML feature set includes:
-
-- cpu_usage
-- memory_usage
-- heartbeat_status
-- dag_parse_time
-- recent_changes
-- scheduler_pod_status
-- worker_restarts
-
-### Model
-
-- Algorithm: Random Forest Classifier
-- Estimators: 200
-- Train/Test Split: 80/20
-- Random State: 42
-
-The trained model is stored as:
-
-```text
-backend/models/incident_classifier.joblib
-```
-
-### Current ML Validation
-
-The current Random Forest model achieved:
-
-**Held-out Test Accuracy: 94%**
-
-The result is based on the synthetic dataset used for the V1 proof of concept.
-
-It is not production performance and should not be interpreted as an accuracy estimate for real-world Airflow incidents.
-
-The main observed classification confusion was between:
-
-- DAG Parsing ↔ Unknown
-- Scheduler ↔ Resource
-
-Further validation with broader and more realistic incident data is planned.
-
----
-
-## Synthetic Incident Scenarios
-
-The project includes controlled Airflow DAGs that generate synthetic failures for demonstration and testing.
-
-Examples include:
-
-### Resource Failure
-
-Simulates a resource-pressure failure using synthetic CPU, memory, and worker restart signals.
-
-### Kubernetes Failure
-
-Simulates Kubernetes-style failure evidence such as:
-
-```text
-PodStatus=CrashLoopBackOff
-RestartCount=5
-ExitCode=137
-```
-
-The scenario does not modify or interact with a real Kubernetes cluster.
-
-### Kubernetes Image Failure
-
-Simulates:
-
-```text
-PodStatus=ImagePullBackOff
-```
-
-### DAG Parsing Failure
-
-A controlled import failure is used to generate an actual Airflow DAG parsing/import error.
-
-### Configuration Failure
-
-A controlled failure simulates a missing Airflow configuration dependency:
-
-```text
-Connection=customer_database
-ConfigStatus=MISSING_CONNECTION
-```
-
-These scenarios are intended for local testing and demonstration only.
-
----
-
-## Data Strategy
-
-The V1 implementation separates operational knowledge, ML training data, and demonstration data.
-
-### Reference Environment
-
-Used to understand:
-
-- Airflow support workflows
-- Incident patterns
-- Operational evidence
-- L1 investigation processes
-
-### Synthetic ML Dataset
-
-Used for:
-
-- Model training
-- Model evaluation
-- Controlled experiments
-
-This avoids requiring confidential production incident data.
-
-### Local Airflow Environment
-
-Used to generate actual Airflow failure evidence and demonstrate the end-to-end investigation workflow.
-
-No customer production credentials or confidential customer data are required for the V1 demonstration.
-
----
-
-## Technology Stack
-
-### Frontend
-- React
-- Vite
-
-### Backend
-- Python
-- FastAPI
-
-### Machine Learning
-- Pandas
-- Scikit-learn
-- Random Forest
-- SHAP
-- Joblib
-
-### Airflow
-- Apache Airflow
-- Airflow REST API
-- Docker
-
-### Support Intelligence
-- Evidence Engine
-- Feature Pipeline
-- Incident Classifier
-- SHAP Explanation
-- Runbook Engine
-- L1 Recommendation Engine
-
----
-
-## Project Structure
-
-```text
-airflow-support-intelligence/
-│
-├── backend/
-│   ├── app/
-│   │   ├── analyze.py
-│   │   ├── evidence.py
-│   │   ├── airflow_adapter.py
-│   │   ├── runbook.py
-│   │   └── recommendation.py
-│   │
-│   ├── data/
-│   │   └── synthetic_incidents.csv
-│   │
-│   └── models/
-│       └── incident_classifier.joblib
-│
-├── frontend/
-│   └── ...
-│
-├── ml/
-│   ├── generate_data.py
-│   ├── train.py
-│   ├── predict.py
-│   └── explain.py
-│
-├── runbooks/
-│   ├── scheduler.md
-│   ├── dag_parsing.md
-│   ├── resource.md
-│   ├── kubernetes.md
-│   ├── configuration.md
-│   └── unknown.md
-│
-├── dags/
-│   ├── support_intelligence_failure.py
-│   ├── support_intelligence_resource_failure.py
-│   ├── support_intelligence_kubernetes_failure.py
-│   ├── support_intelligence_kubernetes_image_failure.py
-│   ├── support_intelligence_dag_parsing_failure.py
-│   └── support_intelligence_configuration_failure.py
-│
-└── README.md
-```
-
----
-
-## Getting Started
-
-### 1. Clone the Repository
-
-```bash
-git clone <YOUR_REPOSITORY_URL>
-cd airflow-support-intelligence
-```
-
-### 2. Start the Local Airflow Environment
-
-Start the local Airflow environment using the project's Docker configuration.
-
-Verify that Airflow is available before starting the intelligence backend.
-
-### 3. Install Backend Dependencies
-
-Create and activate a Python virtual environment:
-
-```bash
-python -m venv .venv
-```
-
-Windows:
-
-```bash
-.venv\Scripts\activate
-```
-
-Install the required dependencies:
-
-```bash
-pip install -r backend/requirements.txt
-```
-
-### 4. Train the ML Model
-
-Generate the synthetic training dataset:
-
-```bash
-python ml/generate_data.py
-```
-
-Train the Random Forest classifier:
-
-```bash
-python ml/train.py
-```
-
-The trained model will be saved under:
-
-```text
-backend/models/
-```
-
-### 5. Start the FastAPI Backend
-
-From the project root:
-
-```bash
-uvicorn backend.main:app --reload
-```
-
-The backend provides the APIs required by the frontend and connects to the configured Airflow REST API.
-
-### 6. Start the Frontend
-
-Install frontend dependencies:
-
-```bash
-npm install
-```
-
-Start the Vite development server:
-
-```bash
-npm run dev
-```
-
-Open the dashboard using the URL shown by Vite.
-
----
-
-## Demonstration
-
-The V1 demonstration follows this process:
-
-1. Start Airflow
-2. Start the FastAPI backend
-3. Start the React frontend
-4. Trigger a synthetic failure DAG
-5. Airflow records the failed DAG run
-6. Backend automatically detects the new failure
-7. Airflow evidence is collected
-8. Incident intelligence is generated
-9. Frontend displays the investigation result
-
-The dashboard can display:
-
-- Incident detection status
-- Incident classification
-- Model confidence
-- Airflow evidence
-- Failed task information
-- Failure logs
-- SHAP contributors
-- Matched runbook
-- L1 investigation checks
-- Escalation guidance
-
-### Example Investigation
-
-A synthetic Kubernetes image failure may produce evidence such as:
-
-```text
-Failure:
-Synthetic Kubernetes image failure detected
-
-PodStatus:
-ImagePullBackOff
-
-RestartCount:
-0
-
-ExitCode:
-1
-```
-
-The intelligence layer can then combine the available evidence and produce an output similar to:
-
-```text
-Incident Class:
-Kubernetes
-
-Confidence:
-94%
-
-Runbook:
-kubernetes.md
-
-Recommendation:
-Inspect the corresponding Kubernetes pod
-and review pod events for image retrieval/startup issues.
-```
-
-The exact classification and confidence depend on the evidence available to the system.
-
----
-
-## Design Principles
-
-### 1. Human-in-the-Loop
-
-The platform provides investigation support rather than autonomous production remediation.
-
-```text
-System → Investigate & Recommend
-Engineer → Decide & Act
-```
-
-### 2. Explainability
-
-ML predictions should provide supporting explanations so engineers can understand which features influenced the prediction.
-
-### 3. Airflow Specialization
-
-The project is not intended to replace general AIOps or ITSM platforms.
-
-The focus is on applying operational intelligence specifically to the Airflow L1 investigation workflow.
-
-### 4. Evidence-Driven Investigation
-
-The platform aims to reduce the need for engineers to manually correlate information from multiple operational sources.
-
-### 5. Safe Demonstration
-
-The V1 proof of concept uses synthetic incident scenarios and a local Airflow environment.
-
-No automatic production modification is performed.
-
----
-
-## Existing AIOps vs. This V1
-
-General AIOps and ITSM platforms already provide capabilities such as:
-
-- Incident management
-- Alert correlation
-- Event intelligence
-- Generic anomaly detection
-- Automation
-
-This project takes a narrower approach:
-
-| General AIOps | This V1 |
-|---|---|
-| Broad IT operations | Airflow-specific |
-| Multiple technology domains | Airflow incident patterns |
-| Generic incident triage | Airflow L1 investigation |
-| General AI insights | ML + SHAP explanation |
-| General workflows | Airflow-specific runbooks |
-| Broad automation | Human-controlled L1 guidance |
-
-The goal is therefore specialization rather than replacing existing AIOps platforms.
-
----
-
-## Evaluation
-
-The V1 evaluation considers both technical and operational measures.
-
-### Technical Metrics
-- Classification accuracy
-- Precision
-- Recall
-- F1-score
-- Explanation consistency
-
-### Operational Metrics
-- Runbook retrieval accuracy
-- Escalation accuracy
-- Investigation time
-- Evidence coverage
-
-These metrics will become more meaningful as the system is evaluated against broader and more realistic incident scenarios.
-
----
-
-## Roadmap
-
-### V1 — L1 Airflow Incident Intelligence
-
-Current focus:
-
-- Automatic incident detection
-- Airflow evidence collection
-- Incident classification
-- SHAP explanation
-- Runbook mapping
-- L1 recommendations
-- Escalation guidance
-
-### V2 — Broader L1 Intelligence
-
-Planned expansion:
-
-- More incident categories
-- Additional Airflow operational signals
-- Broader evidence correlation
-- Improved classification
-- Expanded runbook coverage
-
-### V3 — L2 RCA Assistance
-
-Potential capabilities:
-
-- Deeper root-cause analysis
-- Cross-system evidence correlation
-- Historical incident comparison
-- Advanced investigation assistance
-
-### V4 — L3 Operational Intelligence
-
-Potential capabilities:
-
-- Advanced operational analytics
-- Broader infrastructure intelligence
-- Predictive operational insights
-- Advanced support automation
-
----
-
-## Current Status
-
-**V1 Working Proof of Concept**
-
-Implemented:
-
-- [x] Synthetic incident dataset generation
-- [x] Random Forest incident classifier
-- [x] Model evaluation
-- [x] SHAP explanations
-- [x] Airflow REST API integration
-- [x] Airflow evidence collection
-- [x] Synthetic Airflow failure scenarios
-- [x] Automatic failed-run detection
-- [x] Runbook mapping
-- [x] L1 recommendation generation
-- [x] React + Vite dashboard
-- [x] End-to-end demonstration workflow
-
-Planned:
-
-- [ ] PostgreSQL persistence
-- [ ] Kubernetes telemetry integration
-- [ ] Prometheus integration
-- [ ] Grafana integration
-- [ ] OpenTelemetry integration
-- [ ] Broader incident dataset
-- [ ] Expanded incident classification
-- [ ] Historical incident analysis
-- [ ] Advanced L2 RCA assistance
-
----
-
-## Disclaimer
-
-This repository represents a working proof of concept.
-
-The ML results are based on synthetic data and are not representative of production performance.
-
-Synthetic failure DAGs are designed for controlled local demonstration and testing. They do not intentionally modify or disrupt production infrastructure.
-
-The platform provides recommendations and investigation assistance; it does not autonomously perform production remediation.
-
----
+Browser tests serve the built frontend and use temporary stores/source roots and
+simulated Airflow/provider responses. They do not need a live Airflow instance or
+real API key. A before/after fingerprint guard checks the sibling local DAG directory;
+leave those files unchanged during a test run. Do not run demo resets concurrently.
+
+## Persistence, limitations and sharing
+
+Reviews, actions and feedback use local JSON stores; source backups live under
+`data/source_backups`. Keep one backend process. Session analysis/chat and unsaved
+editor drafts are not durable: save reviewed source before leaving. Latest-run
+analysis is supported; the UI is not a historical-run selector.
+
+This is a trusted-local PoC, not a production authorization or sandbox system.
+Reviewer roles are self-declared. Source execution can change real DAG files and
+trigger work when explicitly confirmed. Evaluate with synthetic, repeatable DAGs.
+Real Kubernetes/Prometheus telemetry integration, authenticated multi-user operation,
+database persistence and broader source layouts remain future work. The original
+ML dataset is synthetic; model metrics must not be represented as production accuracy.
+
+Before sending the project, ensure the current implementation is included: a Git
+clone contains committed files only. Do not send `.env`, keys, `.venv`, `node_modules`,
+private logs, local backups or personal runtime histories. If sharing the separate
+Airflow setup, remove its secrets and explain its initialization/credentials separately.
+The local `data/actions.json` may contain history; review sharing contents deliberately.
+
+## Further reading
+
+- [General source execution: current policy and supported scope](docs/general-source-execution.md)
+- [UI redesign and verification report](docs/ui-redesign.md)
+- [Application Code classification](docs/application-code-classification.md)
+- [LLM configuration and provider diagnostics](docs/llm-setup.md)
+- [General AI investigation design](docs/general-ai-remediation.md)
+
+Older reports retain historical test counts and implementation decisions; the current
+source-execution policy above supersedes their original two-demo write restriction.
 
 ## Author
 
 **Dasun Sandeepa**
-Intern – Software Engineer, Airflow Support
-iVedha Inc.
 
----
+Intern - Software Engineer, Airflow Support, iVedha Inc.
 
 ## License
 
