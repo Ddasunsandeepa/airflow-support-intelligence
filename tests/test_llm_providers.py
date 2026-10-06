@@ -210,5 +210,5 @@ def test_chat_endpoint_survives_quota_failure(monkeypatch, incident_type, tmp_pa
     assert create.call_count == (2 if incident_type == "dag" else 1)
     if incident_type == "dag":
         assert payload["diagnosis"]["incident_class"] == "Resource"
-        assert payload["code_change"]["available"] is True
-        assert payload["code_change"]["proposed_code"]
+        assert payload["code_change"]["available"] is False
+        assert payload["code_change"]["generated_by"] == "no_proposal"

@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from typing import TypeVar
 from urllib.parse import quote
 
@@ -71,7 +72,7 @@ def _request_provider(provider: str, prompt: str, schema: dict, openai_model: st
 
 
 def request_structured_llm(
-    prompt: str, result_model: type[ResultModel], *, openai_model: str
+    prompt: str, result_model: type[ResultModel], *, openai_model: str, diagnostics: bool = False
 ) -> dict:
     """Shared transport for the two existing analysis prompts and response contracts.
 
@@ -80,14 +81,21 @@ def request_structured_llm(
     their existing deterministic evidence/ML analysis.
     """
     primary = os.getenv("LLM_PROVIDER", "openai").strip().lower()
+    attempts = []
+    def failure(status):
+        return {"status": status, **({"provider_attempts": attempts} if diagnostics else {})}
     if primary == "none":
-        return {"status": "not_configured"}
+        return failure("not_configured")
     providers = list(dict.fromkeys([
         primary,
         *[item.strip().lower() for item in os.getenv("LLM_FALLBACK_PROVIDERS", "").split(",") if item.strip()],
     ]))
     status = "not_configured"
     for provider in providers:
+        model = {"gemini": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"), "openai": openai_model,
+                 "ollama": os.getenv("OLLAMA_MODEL", "")}.get(provider, "")
+        attempt = {"provider": provider, "model": model, "status": "not_configured"}
+        attempts.append(attempt)
         required = {"openai": "OPENAI_API_KEY", "gemini": "GEMINI_API_KEY", "ollama": "OLLAMA_MODEL"}
         if provider not in required:
             logger.warning("Unsupported LLM provider configuration; using evidence fallback.")
@@ -98,15 +106,48 @@ def request_structured_llm(
         try:
             output = _request_provider(provider, prompt, result_model.model_json_schema(), openai_model)
             result = result_model.model_validate_json(output).model_dump()
+            attempt["status"] = "success"
+            if diagnostics:
+                return {"status": "success", "result": result, "provider_attempts": attempts}
             return {**result, "status": "success"}
         except (OpenAIError, requests.RequestException) as exc:
             status = "provider_unavailable"
+            attempt.update(safe_provider_error(exc))
+            attempt["status"] = status
             # Do not log provider response bodies, credentials, or incident evidence.
             logger.warning("LLM provider %s unavailable (%s); trying fallback.", provider, type(exc).__name__)
         except (ValueError, TypeError, KeyError, IndexError, AttributeError) as exc:
             status = "invalid_llm_response"
+            attempt.update(status=status, error_category=type(exc).__name__, message="Provider output did not match the requested schema or was incomplete.")
             logger.warning("LLM provider %s returned invalid output (%s); trying fallback.", provider, type(exc).__name__)
-    return {"status": status}
+    return failure(status)
+
+
+def safe_provider_error(exc) -> dict:
+    """Diagnostic metadata only: never exception URLs, headers, keys or raw payloads."""
+    response = getattr(exc, "response", None)
+    http_status = getattr(response, "status_code", None)
+    result = {"http_status": http_status if isinstance(http_status, int) else None,
+              "error_category": type(exc).__name__}
+    try:
+        body = response.json() if response is not None else {}
+        error = body.get("error", {}) if isinstance(body, dict) else {}
+        if isinstance(error, dict):
+            category = error.get("status") or error.get("code")
+            if isinstance(category, (str, int)):
+                result["error_category"] = str(category)[:80]
+            message = error.get("message", "")
+            if isinstance(message, str):
+                for name in ("GEMINI_API_KEY", "OPENAI_API_KEY"):
+                    secret = os.getenv(name)
+                    if secret:
+                        message = message.replace(secret, "[REDACTED]")
+                message = re.sub(r"(?:AIza[\w-]+|sk-[\w-]+)", "[REDACTED]", message)
+                message = re.sub(r"(?i)(key|token|authorization)=\S+", r"\1=[REDACTED]", message)
+                result["message"] = message[:800]
+    except (ValueError, TypeError, AttributeError):
+        pass
+    return result
 
 
 def build_developer_prompt(

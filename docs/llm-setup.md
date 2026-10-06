@@ -5,6 +5,14 @@ in `backend/app/developer_llm.py`. Their prompts and public response contracts
 remain separate. ML, Kubernetes evidence, policy, and controlled source changes
 continue through the existing pipeline.
 
+The configured account was verified on 2026-10-05 with `gemini-3.5-flash-lite`:
+real structured AI proposal succeeded. The old `gemini-2.5-flash` generation request
+returned HTTP 404 (`NOT_FOUND`: unavailable to new users), despite metadata
+being available. `gemini-3.8-flash` returned high-demand 503s and `gemini-3.7-flash`
+timed out. Model discovery does not guarantee generation access or capacity.
+See [the exact live result](general-ai-remediation.md). Explicit `GEMINI_MODEL`
+configuration takes precedence over the legacy code default.
+
 ## Gemini demo setup (PowerShell, project root)
 
 ```powershell
@@ -17,7 +25,7 @@ Edit `.env` locally and add your Gemini API key:
 ```ini
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=your-key-here
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.5-flash-lite
 LLM_FALLBACK_PROVIDERS=
 ```
 
@@ -37,7 +45,7 @@ override `.env`; clear any stale provider/model variables in the launching shell
 Restart the backend after configuration changes. `.env` is ignored by Git.
 
 Alternatively, use `$env:LLM_PROVIDER = "gemini"`, `$env:GEMINI_API_KEY = "..."`,
-and `$env:GEMINI_MODEL = "gemini-2.5-flash"` in the launching PowerShell session
+and `$env:GEMINI_MODEL = "gemini-3.5-flash-lite"` in the launching PowerShell session
 and start Uvicorn without `--env-file` (no dotenv installation needed).
 
 Test with a real DAG ID from your Airflow instance:

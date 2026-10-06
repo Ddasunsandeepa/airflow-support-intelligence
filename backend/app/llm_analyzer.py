@@ -11,7 +11,7 @@ from backend.app.developer_llm import request_structured_llm
 class IncidentLLMResult(BaseModel):
     model_config = ConfigDict(strict=True)
 
-    incident_class: Literal["Scheduler", "DAG Parsing", "Resource", "Kubernetes", "Configuration", "Unknown"]
+    incident_class: Literal["Scheduler", "DAG Parsing", "Resource", "Kubernetes", "Configuration", "Application Code", "Unknown"]
     confidence: float = Field(ge=0, le=1, allow_inf_nan=False)
     reasoning: str
     supporting_evidence: list[str]
@@ -26,6 +26,7 @@ INCIDENT_CLASSES = [
     "Resource",
     "Kubernetes",
     "Configuration",
+    "Application Code",
     "Unknown",
 ]
 
@@ -72,7 +73,7 @@ Analyze the evidence and return a JSON object with exactly
 these fields:
 
 {{
-  "incident_class": "Scheduler | DAG Parsing | Resource | Kubernetes | Configuration | Unknown",
+  "incident_class": "Scheduler | DAG Parsing | Resource | Kubernetes | Configuration | Application Code | Unknown",
   "confidence": 0.0,
   "reasoning": "Short evidence-based explanation",
   "supporting_evidence": [
@@ -98,6 +99,9 @@ Important rules:
 7. Never recommend automatic production changes.
 8. The human support engineer remains responsible for
    operational decisions.
+9. Application Code requires clear task-runtime exception/data evidence.
+   A PythonOperator failure alone is insufficient. Prefer stronger parsing,
+   infrastructure or configuration evidence; ValueError alone is ambiguous.
 """
 
 

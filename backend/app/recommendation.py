@@ -46,6 +46,13 @@ def generate_recommendation(
             "Review Airflow logs for configuration-related errors.",
             "Check version and provider compatibility if applicable.",
         ],
+        "Application Code": [
+            "Review the failed task exception and stack trace.",
+            "Identify the source function associated with the failed task.",
+            "Inspect input/data conditions and recent source changes affecting the task.",
+            "Use Developer Copilot to investigate a review-only source proposal from safely resolved source.",
+            "Validate and approve the exact reviewed correction before applying or executing it.",
+        ],
         "Unknown": [
             "Validate the available incident evidence.",
             "Check basic Airflow component health.",

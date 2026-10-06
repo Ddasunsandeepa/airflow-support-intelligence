@@ -29,6 +29,11 @@ def extract_evidence_signals(
 
     This layer is deterministic and evidence-driven.
     It does not inspect DAG IDs and does not call an LLM.
+
+    Priority: direct DAG import evidence; then the existing Kubernetes,
+    parsing, explicit task MemoryError, configuration, scheduler and resource
+    rules; then task-runtime application exceptions; otherwise Unknown. Confidence is rule strength,
+    not a calibrated causal probability.
     """
 
     failure_message = _lower(
@@ -39,6 +44,21 @@ def extract_evidence_signals(
     )
 
     supporting_evidence: list[str] = []
+
+    # Direct incident-specific import evidence takes precedence. A global import
+    # error count is not proof that this failed task's DAG could not be imported.
+    direct_import = (
+        evidence.get("incident_type") == "import_error"
+        or bool(evidence.get("import_error_filename"))
+        or any(term in failure_message for term in ("broken dag", "dag import", "failed to import"))
+    )
+    if direct_import:
+        return EvidenceSignalResult(
+            incident_class="DAG Parsing", confidence=0.90,
+            matched_signals=["direct_dag_import_evidence"],
+            supporting_evidence=["Direct DAG import/parsing failure evidence was observed."]
+            + ([f"Exception message: {_text(evidence.get('failure_exception_message'))}"] if failure_message else []),
+        )
 
     # --------------------------------------------------
     # Kubernetes signals
@@ -79,6 +99,11 @@ def extract_evidence_signals(
             )
 
     kubernetes_signals: list[str] = []
+
+    for term in ("crashloopbackoff", "imagepullbackoff", "errimagepull"):
+        if term in failure_message:
+            kubernetes_signals.append(term)
+            supporting_evidence.append(f"Failure message reports Kubernetes state: {term}.")
 
     if pod_status.lower() in {
         "crashloopbackoff",
@@ -128,7 +153,7 @@ def extract_evidence_signals(
         "modulenotfounderror",
         "syntaxerror",
         "dag import",
-        "parsing",
+        "dag parsing",
     )
 
     parsing_matches = [
@@ -156,6 +181,17 @@ def extract_evidence_signals(
         )
 
     # --------------------------------------------------
+    # Explicit runtime memory failure is stronger than generic "configured" text.
+    # Keep direct import and Kubernetes/container precedence above this rule.
+    if exception_type == "memoryerror" and evidence.get("failed_task_id"):
+        return EvidenceSignalResult(
+            incident_class="Resource", confidence=0.90,
+            matched_signals=["runtime_memory_error"],
+            supporting_evidence=["Runtime exception: MemoryError",
+                                 f"Failed task: {evidence['failed_task_id']}",
+                                 f"Exception message: {_text(evidence.get('failure_exception_message'))}"],
+        )
+
     # Configuration signals
     # --------------------------------------------------
 
@@ -254,6 +290,41 @@ def extract_evidence_signals(
                     f"{_text(evidence.get('failure_exception_message'))}"
                 )
             ],
+        )
+
+    # Application signals are deliberately last: they never override any of
+    # the existing domain signals above. An operator name alone proves nothing.
+    runtime_failure = bool(_text(evidence.get("failed_task_id"))) and (
+        _lower(evidence.get("latest_dag_run_state")) == "failed"
+        or isinstance(evidence.get("failed_task_count"), int) and evidence["failed_task_count"] > 0
+    )
+    runtime_exceptions = {
+        "zerodivisionerror", "typeerror", "keyerror", "attributeerror",
+        "indexerror", "nameerror", "unboundlocalerror",
+    }
+    # ValueError alone is ambiguous. Recognize explicit data transformation
+    # failures only, after configuration and infrastructure have been checked.
+    value_error_terms = (
+        "invalid literal for int()", "could not convert string to float",
+        "not enough values to unpack", "too many values to unpack",
+        "math domain error", "no valid transaction amounts",
+    )
+    application_exception = exception_type in runtime_exceptions or (
+        exception_type == "valueerror" and any(term in failure_message for term in value_error_terms)
+    )
+    if runtime_failure and application_exception:
+        details = [
+            f"Runtime exception: {_text(evidence.get('failure_exception_type'))}",
+            f"Failed task: {_text(evidence.get('failed_task_id'))}",
+        ]
+        if failure_message:
+            details.append(f"Exception message: {_text(evidence.get('failure_exception_message'))}")
+        if _text(evidence.get("failed_task_operator")):
+            details.append(f"Failed task operator: {_text(evidence.get('failed_task_operator'))}")
+        return EvidenceSignalResult(
+            incident_class="Application Code", confidence=0.90,
+            matched_signals=["task_runtime_failure", f"exception_type={exception_type}"],
+            supporting_evidence=details,
         )
 
     return EvidenceSignalResult(

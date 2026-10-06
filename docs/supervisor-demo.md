@@ -1,8 +1,16 @@
-# Supervisor demo: source review, controlled runtime recovery, feedback
+# Supervisor demo: operational recovery and reviewed source remediation
 
-This is a controlled synthetic demonstration. Source proposals are review-only;
-runtime recovery triggers a new DAG run with `dag_run.conf`. These are separate
-operations. Feedback records evaluation without retraining or executing anything.
+For the redesigned console routes, current UI workflow and final verification,
+see [Operations console redesign handoff](ui-redesign.md). The backend safety and
+synthetic-demo procedures below remain applicable.
+
+This is a controlled synthetic demonstration with two paths. Existing operational
+recovery triggers a new DAG run with `dag_run.conf` and never writes source. The
+new source-remediation path applies a reviewed, validated, explicitly approved
+revision of one allowlisted demo DAG. Feedback is evaluation only in both paths.
+
+See [source-remediation implementation and verification](source-remediation.md)
+for the models, endpoints, state machine, safety boundaries and test results.
 
 ## Start the existing services
 
@@ -32,13 +40,14 @@ Open the Vite URL printed in the terminal (normally `http://localhost:5173`).
 Keep the backend as one process for the JSON stores. Existing shell variables
 override `.env`. The source directory defaults to the sibling `airflow/dags`;
 `AIRFLOW_DAG_SOURCE_ROOT` can override it at startup. A container deployment needs
-an explicit read-only mount of the DAG directory and the corresponding setting.
+an explicit mount of the DAG directory and the corresponding setting. Keep it
+read-only for operational demos; source application needs a writable mount.
 
 For a demo independent of cloud availability, use `LLM_PROVIDER=none` before
 starting the backend. Otherwise keep your configured Gemini provider; provider
 failures fall back to evidence reasoning. See [LLM setup](llm-setup.md).
 
-## Demonstrate the complete flow
+## Path A: existing operational recovery
 
 1. In Airflow, select `support_intelligence_configuration_review_demo`. If paused,
    unpause it using Airflow's UI. Trigger it with `{"mode":"failure"}` and wait
@@ -50,13 +59,11 @@ failures fall back to evidence reasoning. See [LLM setup](llm-setup.md).
    missing features should stay visible rather than being invented.
 4. In **Developer Copilot**, ask: “Why did the configuration task fail, and what
    should I review before changing it?” Click **Send**.
-5. Under **Proposed Source-Level Correction**, point out **CONTROLLED FALLBACK ·
-   REVIEW ONLY**. The replacement is a deterministic demo template, not an
-   AI-generated patch.
-6. Click **Review Proposed Change**. In **Source Code Change Review**, show the
-   target, path, complete current DAG, complete proposed DAG, and exact Git-style
-   diff with additions/deletions. Imports, task declaration, and DAG declaration
-   are retained. There is no source execution button.
+5. Inspect provider status and investigation evidence. Source proposals now require
+   an actual valid AI response; unavailable providers do not create known patches.
+6. If an AI proposal is available, click **Review Proposed Change** to inspect and
+   edit its current/proposed source and authoritative diff. This operational demo
+   is outside the source-write allowlist: source approval/execution are disabled.
 7. Move to **Controlled Runtime Recovery**. Click **Create Remediation Action**.
    Creation runs existing policy/catalog validation and initially proposes
    `mode=failure`; it does not execute anything.
@@ -103,8 +110,10 @@ failures fall back to evidence reasoning. See [LLM setup](llm-setup.md).
   path traversal. DAG IDs that differ from filenames need future mapping work.
 - The supervisor-demo source file must actually exist to produce its proposal;
   an absent file no longer produces a fabricated current-code snapshot.
-- Dynamic LLM patch generation was intentionally skipped. Optional LLM diagnosis
-  remains available, but cannot overwrite a controlled proposal's evidence/reason.
+- Safely resolved failed DAGs use the general structured AI investigation and
+  proposal pipeline. No configuration/supervisor/Kubernetes hardcoded patch remains.
+  Source application is still restricted to the two explicit source-write demos.
+  See [general AI verification](general-ai-remediation.md).
 - Kubernetes signals in this demo are from controlled task evidence, not a new
   live Kubernetes integration. SHAP explains model contributions, not causation.
 - Runtime approval, action policy, executor allowlisting, and verification remain
@@ -113,7 +122,7 @@ failures fall back to evidence reasoning. See [LLM setup](llm-setup.md).
 
 ## Verification commands
 
-The initial backend baseline was 77 passing tests. New tests isolate JSON stores
+The baseline before source remediation was 125 passing tests. Tests isolate JSON stores
 so future test runs do not add actions or feedback to the engineer's history.
 
 ```powershell
@@ -132,7 +141,7 @@ stores, and simulate only the Airflow boundary; they never trigger a live DAG.
 cd D:\Projects\airflow-support-intelligence
 .venv/Scripts/python.exe -m pip install playwright
 $env:RUN_BROWSER_TESTS = "1"
-.venv/Scripts/python.exe -B -m pytest tests/test_demo_browser.py -q -p no:cacheprovider
+.venv/Scripts/python.exe -B -m pytest tests/test_demo_browser.py tests/test_source_browser.py -q -p no:cacheprovider
 Remove-Item Env:RUN_BROWSER_TESTS
 ```
 

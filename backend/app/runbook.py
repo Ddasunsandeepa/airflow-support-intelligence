@@ -16,6 +16,7 @@ RUNBOOK_MAP = {
     "Resource": "resource.md",
     "Kubernetes": "kubernetes.md",
     "Configuration": "configuration.md",
+    "Application Code": "application_code.md",
     "Unknown": "unknown.md",
 }
 

@@ -9,9 +9,6 @@ from backend.app.hybrid_analyzer import analyze_hybrid
 
 from backend.app.developer_llm import analyze_with_developer_llm
 
-from backend.app.source_change_provider import (
-    get_controlled_source_change,
-)
 
 
 def _evidence_to_dict(evidence):
@@ -166,6 +163,11 @@ def _build_recommended_fix(incident_class):
             "Inspect recent configuration changes and verify the "
             "affected Airflow or deployment configuration."
         ),
+        "Application Code": (
+            "Inspect the failing task's source code and the runtime condition that caused "
+            "the Python exception. If the defect is source-level, prepare a reviewed source "
+            "remediation proposal when source resolves safely. Applying it requires separate execution policy approval."
+        ),
         "Unknown": (
             "The available evidence is insufficient for a specific "
             "developer fix. Continue investigation before changing code."
@@ -242,6 +244,13 @@ def _build_tests(incident_class):
             "Validate the changed configuration.",
             "Confirm the affected DAG or component starts normally.",
         ],
+        "Application Code": [
+            "Validate proposed Python syntax without executing the DAG.",
+            "Validate DAG structure and the affected task/function mapping.",
+            "Reproduce or test the failing input condition and confirm edge-case handling.",
+            "Require validation and human approval of the exact source revision before application.",
+            "Confirm Airflow parses the reviewed DAG before execution, then verify the corrected task.",
+        ],
         "Unknown": [
             "Collect additional logs and infrastructure evidence.",
             "Re-run incident analysis after additional evidence is available.",
@@ -259,6 +268,7 @@ def analyze_developer_request(
     incident_type: str = "dag",
     dag_id: str | None = None,
     import_error_id: str | None = None,
+    allow_demo_fallback: bool = False,
 ) -> DeveloperChatResponse:
     """
     Analyze a developer request using live Airflow evidence.
@@ -385,54 +395,73 @@ def analyze_developer_request(
         incident_class
     )
 
-    code_change = _build_code_change_proposal(
-        incident_class,
-        airflow_evidence,
-    )
-
-    if incident_type == "dag" and dag_id:
-        controlled_change = get_controlled_source_change(
-            dag_id=dag_id,
-            incident_class=incident_class,
-            failure_message=(
-                airflow_evidence.failure_exception_message
-                if airflow_evidence is not None
-                else None
-            ),
-        )
-
-        if controlled_change is not None:
-            code_change = CodeChangeProposal(
-                available=True,
-                summary=controlled_change.summary,
-                reason=controlled_change.reason,
-                target=controlled_change.target,
-                file_path=controlled_change.file_path,
-                language=controlled_change.language,
-                before_code=controlled_change.before_code,
-                proposed_code=controlled_change.proposed_code,
-                generated_by=controlled_change.generated_by,
-            )
-        else:
-            code_change = CodeChangeProposal(
-                available=False,
-                summary="No reviewed source proposal available.",
-                reason="No supported patch with valid current source is available for this DAG. Evidence analysis remains available.",
-            )
+    code_change = CodeChangeProposal(available=False, generated_by="no_proposal",
+                                     summary="No reviewed source proposal available.")
+    source_outcome = None
+    if incident_type == "dag" and dag_id and airflow_evidence.failed_task_id:
+        from backend.app.source_review_validation import resolve_review_source
+        from backend.app.source_updater import read_exact
+        from backend.app.ai_source_investigation import investigate_source
+        from backend.app.source_remediation import SourceRemediationService
+        from backend.app.evidence_signals import extract_evidence_signals
+        from dataclasses import asdict
+        import json
+        try:
+            path = resolve_review_source(dag_id)
+            source = read_exact(path)
+            code_change.before_code = source
+            code_change.file_path = f"dags/{dag_id}.py"
+            code_change.target = dag_id
+            try:
+                timeline_data = adapter.get_incident_timeline_data(dag_id)
+                # Bounded actual log excerpt; retain task/run metadata separately.
+                timeline_data = dict(timeline_data)
+                logs = timeline_data.pop("task_logs", [])
+                log_excerpt = json.dumps(logs, default=str)[:20000]
+            except Exception:
+                timeline_data, log_excerpt = {}, "Task timeline/log retrieval unavailable."
+            context = {
+                "developer_request": message, "incident_class": incident_class,
+                "evidence_summary": evidence_summary, "airflow_evidence": evidence_dict,
+                "ml_result": ml_result,
+                "evidence_signals": asdict(extract_evidence_signals(evidence_dict, kubernetes_evidence)),
+                "hybrid_analysis": hybrid_result, "timeline": timeline_data, "task_log_excerpt": log_excerpt,
+            }
+            source_outcome = investigate_source(dag_id, source, context, allow_demo_fallback=allow_demo_fallback)
+            if source_outcome["proposal"]:
+                proposed, patch, provenance = source_outcome["proposal"]
+                record = SourceRemediationService().create(
+                    source, proposed, patch, provenance, context, dag_id=dag_id,
+                    investigation=source_outcome.get("investigation"),
+                )
+                code_change = CodeChangeProposal(
+                    available=True, summary=patch.summary, reason=patch.reasoning,
+                    target=dag_id, file_path=record.change.source_code.file_path, language="python",
+                    before_code=source, proposed_code=proposed, generated_by=provenance,
+                    source_remediation_id=record.proposal_id,
+                )
+            else:
+                code_change.reason = ("No AI source proposal: " + source_outcome["provider_status"]
+                                      + ". " + source_outcome.get("validation_error", "Inspect provider status and investigation evidence."))
+        except (ValueError, SyntaxError, OSError) as exc:
+            code_change.reason = f"Source investigation could not be prepared: {exc}"
 
     tests_to_run = _build_tests(
         incident_class
     )
 
-    developer_llm_result = analyze_with_developer_llm(
-        message=message,
-        incident_type=incident_type,
-        incident_reference=incident_reference,
-        evidence=evidence_summary,
-        incident_class=incident_class,
-        confidence=confidence,
-        recommended_fix=recommended_fix,
-    )
+    if source_outcome is None:
+        developer_llm_result = analyze_with_developer_llm(
+            message=message,
+            incident_type=incident_type,
+            incident_reference=incident_reference,
+            evidence=evidence_summary,
+            incident_class=incident_class,
+            confidence=confidence,
+            recommended_fix=recommended_fix,
+        )
+    else:
+        developer_llm_result = {"status": "source_investigation"}
 
     if developer_llm_result["status"] == "success":
         final_summary = developer_llm_result["summary"]
@@ -469,6 +498,15 @@ def analyze_developer_request(
 
         final_recommended_fix = recommended_fix
 
+    investigation = (source_outcome or {}).get("investigation") or {}
+    if investigation:
+        final_summary = investigation["diagnosis"]
+        final_reasoning = investigation["reasoning"]
+        tests_to_run = investigation["tests_to_run"] or tests_to_run
+        final_recommended_fix = investigation["change_summary"] or recommended_fix
+    if source_outcome and source_outcome["provider_status"] != "success":
+        final_reasoning += f" Source proposal provider status: {source_outcome['provider_status']}."
+
     return DeveloperChatResponse(
         status="success",
         message=message,
@@ -485,5 +523,10 @@ def analyze_developer_request(
         recommended_fix=final_recommended_fix,
         code_change=code_change,
         tests_to_run=tests_to_run,
+        root_cause=investigation.get("root_cause"), evidence_used=investigation.get("evidence_used", []),
+        risks=investigation.get("risks", []), assumptions=investigation.get("assumptions", []),
+        provider_status=(source_outcome or {}).get("provider_status"),
+        provider_attempts=(source_outcome or {}).get("provider_attempts", []),
+        proposal_status=code_change.generated_by or "no_proposal",
         human_review_required=True,
     )

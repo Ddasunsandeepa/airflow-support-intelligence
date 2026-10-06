@@ -1,6 +1,10 @@
 # Python virtual environment
 .venv/
+__pycache__/
 .test-runs/
+data/source_remediations.json
+data/remediation_feedback.json
+data/source_backups/
 .env
 .env.*
 !.env.example
