@@ -49,13 +49,16 @@ class SourceCodeChangeProposalRequest(BaseModel):
     proposed_code: str = Field(min_length=1)
     description: str = Field(min_length=1)
     language: str = "python"
-    generated_by: Literal["controlled_fallback", "developer_llm"] | None = None
+    generated_by: Literal["controlled_fallback", "controlled_demo_fallback", "developer_llm", "no_proposal"] | None = None
 
 app = FastAPI(
     title="Airflow Support Intelligence",
     description="AI-assisted L1 Airflow incident investigation and support guidance",
     version="0.1.0",
 )
+
+from backend.app.source_remediation_api import router as source_remediation_router
+app.include_router(source_remediation_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -106,7 +109,7 @@ def build_guidance(final_class, final_confidence, ml_result, llm_result):
         explanation=ml_result.get("explanation", []),
     )
 
-    if llm_result.get("status") == "success":
+    if llm_result.get("status") == "success" and llm_result.get("incident_class") == final_class and llm_result.get("l1_checks"):
         l1_checks = llm_result.get("l1_checks", [])
     else:
         l1_checks = final_recommendation["l1_checks"]
@@ -136,7 +139,7 @@ def build_guidance(final_class, final_confidence, ml_result, llm_result):
     }
 
 
-def build_remediation_recommendation(final_class):
+def build_remediation_recommendation(final_class, evidence=None):
     """
     Build a controlled remediation recommendation from the
     final incident classification.
@@ -144,6 +147,19 @@ def build_remediation_recommendation(final_class):
     This layer selects only predefined actions from the
     Action Registry. It does not execute anything.
     """
+
+    if final_class == "Application Code" or str((evidence or {}).get("failure_exception_type") or "").lower() == "memoryerror":
+        return {
+            "available": False, "action_type": None,
+            "label": "Investigate source remediation",
+            "reason": (
+                "Inspect task source and failing input conditions with Developer Copilot. "
+                "Source remediation may be appropriate only when source resolves safely, "
+                "and a valid reviewed proposal exists. Application is limited by a separate execution policy. "
+                "Validation, exact-revision approval and explicit execution are required."
+            ),
+            "risk_level": None, "required_role": None, "approval_required": True,
+        }
 
     action_by_incident_class = {
         "Scheduler": ActionType.TRIGGER_DAG,
@@ -729,7 +745,7 @@ def analyze_airflow(dag_id: str | None = None):
     )
 
     remediation_recommendation = build_remediation_recommendation(
-    final_class
+    final_class, airflow_evidence_dict
     )
 
     # --------------------------------------------------
@@ -836,6 +852,7 @@ def developer_chat(request: DeveloperChatRequest):
             incident_type=request.incident_type,
             dag_id=request.dag_id,
             import_error_id=request.import_error_id,
+            allow_demo_fallback=request.allow_demo_fallback,
         )
 
     except ValueError as exc:

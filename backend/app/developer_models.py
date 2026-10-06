@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class DeveloperChatRequest(BaseModel):
+    allow_demo_fallback: bool = False
     """
     Request submitted to the Airflow Developer Copilot.
 
@@ -32,6 +33,7 @@ class DiagnosisResult(BaseModel):
 
 
 class CodeChangeProposal(BaseModel):
+    source_remediation_id: str | None = None
     """
     Proposed source-code change.
 
@@ -51,9 +53,16 @@ class CodeChangeProposal(BaseModel):
 
     before_code: Optional[str] = None
     proposed_code: Optional[str] = None
-    generated_by: Optional[Literal["controlled_fallback", "developer_llm"]] = None
+    generated_by: Optional[Literal["controlled_fallback", "controlled_demo_fallback", "developer_llm", "no_proposal"]] = None
 
 class DeveloperChatResponse(BaseModel):
+    root_cause: str | None = None
+    evidence_used: List[str] = Field(default_factory=list)
+    risks: List[str] = Field(default_factory=list)
+    assumptions: List[str] = Field(default_factory=list)
+    provider_status: str | None = None
+    provider_attempts: list[dict] = Field(default_factory=list)
+    proposal_status: str = "no_proposal"
     """
     Structured response returned by the Developer Copilot.
     """

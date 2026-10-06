@@ -8,7 +8,11 @@ export default function UnifiedDiff({ diff }) {
         else if (line.startsWith("+")) style = "added";
         else if (line.startsWith("-")) style = "removed";
         else if (line.startsWith("@@")) style = "hunk";
-        return <div key={index} className={`diff-line diff-line-${style}`}>{line || " "}</div>;
+        return (
+          <div key={index} className={`diff-line diff-line-${style}`}>
+            {line || " "}
+          </div>
+        );
       })}
     </div>
   );

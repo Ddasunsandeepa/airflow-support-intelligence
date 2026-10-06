@@ -1,5 +1,4 @@
 import ast
-from dataclasses import replace
 from unittest.mock import Mock
 
 import pytest
@@ -8,7 +7,6 @@ from fastapi.testclient import TestClient
 from backend.app import source_resolver as resolver, source_change_provider as provider, main
 from backend.app.action_models import ActionRequest
 from backend.app.change_review import build_runtime_change_proposal, build_source_code_change_proposal
-from backend.app.source_patch_generator import generate_source_patch
 
 
 DAG = "support_intelligence_configuration_review_demo"
@@ -47,7 +45,6 @@ def test_readonly_resolution_and_unknown_dag(source):
     other = source.parent / "new_customer_dag.py"
     other.write_text("raise RuntimeError('must never execute')", encoding="utf-8")
     assert resolver.read_dag_source("new_customer_dag") == other.read_text()
-    assert provider.get_controlled_source_change("new_customer_dag") is None
     assert source.read_bytes() == original
 
 
@@ -67,39 +64,35 @@ def test_resolved_path_escape_rejected(source, monkeypatch):
     assert resolver.resolve_dag_source(DAG) is None
 
 
+REPLACEMENT = 'def configuration_review_demo(**context):\n    return {"reviewed": True}'
+
+
 def test_full_source_proposal_preserves_unaffected_code(source):
     before = source.read_bytes()
-    proposal = provider.get_controlled_source_change(DAG, "Configuration", "LIVE: endpoint missing")
-    assert proposal.before_code == SOURCE
-    assert proposal.generated_by == "controlled_fallback"
-    assert "LIVE: endpoint missing" in proposal.reason
-    assert "if timeout_seconds <= 0:" in proposal.proposed_code
-    ast.parse(proposal.proposed_code)
+    proposed = provider._replace_function_source(resolver.read_dag_source(DAG), "configuration_review_demo", REPLACEMENT)
+    ast.parse(proposed)
     start = SOURCE.index("def configuration_review_demo")
     end = SOURCE.index("\nwith DAG")
-    assert proposal.proposed_code[:start] == SOURCE[:start]
-    assert proposal.proposed_code[proposal.proposed_code.index("\nwith DAG"):] == SOURCE[end:]
+    assert proposed[:start] == SOURCE[:start]
+    assert proposed[proposed.index("\nwith DAG"):] == SOURCE[end:]
     assert source.read_bytes() == before
-    # Subsequent calls use current source rather than a captured snapshot.
     source.write_text(SOURCE.replace('preserve me', 'edited by engineer'), encoding="utf-8")
-    assert "edited by engineer" in provider.get_controlled_source_change(DAG).before_code
+    assert "edited by engineer" in provider._replace_function_source(resolver.read_dag_source(DAG), "configuration_review_demo", REPLACEMENT)
 
 
 @pytest.mark.parametrize("replacement", ["", "def wrong(**context):\n    pass", "def configuration_review_demo():\n    pass", "def configuration_review_demo(**context):\n    pass\nprint('extra')", "not python !", "def configuration_review_demo(**context):\n    break"])
 def test_invalid_suggestion_fails_safely(source, monkeypatch, replacement):
-    suggestion = replace(generate_source_patch(DAG), proposed_function=replacement)
-    monkeypatch.setattr(provider, "generate_source_patch", lambda **kwargs: suggestion)
-    assert provider.get_controlled_source_change(DAG) is None
+    with pytest.raises((ValueError, SyntaxError)):
+        provider._replace_function_source(SOURCE, "configuration_review_demo", replacement)
     assert source.read_text() == SOURCE
 
 
-def test_missing_or_invalid_source(source, monkeypatch):
+def test_missing_or_invalid_source(source):
     source.write_text("invalid python !", encoding="utf-8")
-    assert provider.get_controlled_source_change(DAG) is None
+    with pytest.raises(SyntaxError):
+        provider._replace_function_source(resolver.read_dag_source(DAG), "configuration_review_demo", REPLACEMENT)
     source.unlink()
-    assert provider.get_controlled_source_change(DAG) is None
-    monkeypatch.setattr(provider, "generate_source_patch", lambda **kwargs: None)
-    assert provider.get_controlled_source_change(DAG) is None
+    assert resolver.read_dag_source(DAG) is None
 
 
 def test_replacement_preserves_decorators_and_newlines():
@@ -109,9 +102,9 @@ def test_replacement_preserves_decorators_and_newlines():
 
 
 def test_source_and_runtime_diffs(source):
-    proposal = provider.get_controlled_source_change(DAG)
+    proposed = provider._replace_function_source(SOURCE, "configuration_review_demo", REPLACEMENT)
     review = build_source_code_change_proposal(
-        proposal.target, proposal.file_path, proposal.before_code, proposal.proposed_code, proposal.reason,
+        DAG, f"dags/{DAG}.py", SOURCE, proposed, "Test model proposal",
     )
     assert review.unified_diff.startswith(f"--- dags/{DAG}.py\n+++ dags/{DAG}.py (proposed)")
     lines = review.unified_diff.splitlines()
@@ -127,7 +120,7 @@ def test_source_and_runtime_diffs(source):
     assert runtime.additions == runtime.deletions == 1
 
 
-def test_copilot_passes_evidence_and_keeps_proposal_reason(source, monkeypatch):
+def test_copilot_does_not_fabricate_legacy_demo_patch(source, monkeypatch):
     from backend.app import developer_copilot as copilot
     from backend.app.evidence import AirflowEvidence
     from backend.app.incident_evidence import IncidentEvidence
@@ -144,8 +137,8 @@ def test_copilot_passes_evidence_and_keeps_proposal_reason(source, monkeypatch):
     })
     result = TestClient(main.app).post("/developer/chat", json={"message": "Why?", "dag_id": DAG}).json()
     change = result["code_change"]
-    assert change["available"] and "LIVE missing" in change["reason"]
-    assert change["generated_by"] == "controlled_fallback"
+    assert change["available"] is False
+    assert change["generated_by"] == "no_proposal"
     for target in ("unknown_dag", DAG):
         if target == DAG:
             source.unlink()

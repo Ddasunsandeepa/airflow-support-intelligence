@@ -5,7 +5,7 @@ import hashlib
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.app import main, developer_copilot, source_resolver
+from backend.app import main, developer_copilot, source_resolver, source_patch_generator
 from backend.app.actions.airflow import AirflowActionExecutor
 from backend.app.action_service import ActionService
 from backend.app.evidence import AirflowEvidence
@@ -57,6 +57,14 @@ def demo_backend(tmp_path, monkeypatch):
         def get_dag_runs(self, dag_id, limit=20):
             return {"dag_runs": [{"dag_run_id": "demo-recovery", "state": "success"}]}
 
+    # This test models an external AI response, not a production patch selector.
+    monkeypatch.setattr(source_patch_generator, "request_structured_llm", lambda *a, **kw: {
+        "status": "success", "result": {"status": "proposal", "diagnosis": "Configuration failure",
+        "root_cause": "Missing endpoint", "reasoning": "The supplied function raises ValueError",
+        "evidence_used": ["ValueError", "Actual source"], "target_function": "configuration_review_demo",
+        "proposed_function": 'def configuration_review_demo(**context):\n    return {"endpoint_status": "reviewed"}',
+        "change_summary": "Review endpoint handling", "tests_to_run": ["Verify endpoint configuration"],
+        "risks": ["Engineer must supply actual endpoint policy"], "assumptions": []}})
     adapter = DemoAirflow()
     monkeypatch.setattr(main, "AirflowAdapter", lambda: adapter)
     monkeypatch.setattr(developer_copilot, "AirflowAdapter", lambda: adapter)
@@ -75,7 +83,7 @@ def test_complete_supervisor_demo(demo_backend):
     assert analysis.json()["evidence_signals"]["supporting_evidence"]
     copilot = client.post("/developer/chat", json={"message": "What should I investigate?", "dag_id": DAG}).json()
     proposal = copilot["code_change"]
-    assert proposal["available"] and proposal["generated_by"] == "controlled_fallback"
+    assert proposal["available"] and proposal["generated_by"] == "developer_llm"
     review = client.post("/change-proposals/source-code", json={
         **{key: proposal[key] for key in ("target", "file_path", "before_code", "proposed_code", "generated_by")},
         "description": proposal["reason"],
